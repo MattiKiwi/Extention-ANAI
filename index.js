@@ -206,14 +206,7 @@ async function generateStructuredOutputs(prompt, snapshot) {
     return null;
   }
 
-  const structuredPromptRaw = buildStructuredPrompt(prompt, snapshot);
-  const structuredPrompt = String(
-    typeof structuredPromptRaw === 'string'
-      ? structuredPromptRaw
-      : structuredPromptRaw != null
-        ? JSON.stringify(structuredPromptRaw, null, 2)
-        : '',
-  );
+  const structuredPrompt = stringifyPrompt(buildStructuredPrompt(prompt, snapshot));
   const jsonSchema = getStructuredOutputSchema();
 
   console.debug(`${LOG_PREFIX} Structured request payload`, {
@@ -223,10 +216,17 @@ async function generateStructuredOutputs(prompt, snapshot) {
 
   let rawResult = null;
   try {
-    rawResult = await generateQuietPrompt({
-      quietPrompt: structuredPrompt,
-      jsonSchema,
-    });
+    if (typeof generateRawFn === 'function') {
+      rawResult = await generateRawFn({
+        prompt: structuredPrompt,
+        jsonSchema,
+      });
+    } else {
+      rawResult = await generateQuietPrompt({
+        quietPrompt: structuredPrompt,
+        jsonSchema,
+      });
+    }
   } catch (error) {
     console.error(`${LOG_PREFIX} Structured output request failed.`, error);
     return null;
@@ -240,6 +240,19 @@ async function generateStructuredOutputs(prompt, snapshot) {
   return structured;
 }
 
+function stringifyPrompt(value) {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '';
+  }
+}
+
 function buildStructuredPrompt(prompt, snapshot) {
   const basePrompt = normalizeText(prompt) ?? defaultSettings.prompt;
   const character = normalizeText(snapshot?.characterDescription) ?? 'No character description provided.';
@@ -249,7 +262,7 @@ function buildStructuredPrompt(prompt, snapshot) {
   const transcript = (snapshot?.messages ?? [])
     .map((message, idx) => {
       const speaker = message?.speaker || `Speaker ${idx + 1}`;
-      const text = normalizeText(message?.text) ?? '[No text provided]';
+      const text = normalizeText(message?.text ?? stringifyPrompt(message?.text)) ?? '[No text provided]';
       return `${speaker}: ${text}`;
     })
     .join('\n');
@@ -320,9 +333,9 @@ function parseStructuredOutput(rawResult) {
 
 function applyStructuredOutputs(root, structured) {
   if (!structured) return;
-  const scene = normalizeText(structured.scene) ?? '';
-  const character = normalizeText(structured.character) ?? '';
-  const user = normalizeText(structured.user) ?? '';
+  const scene = normalizeText(stringifyPrompt(structured.scene)) ?? '';
+  const character = normalizeText(stringifyPrompt(structured.character)) ?? '';
+  const user = normalizeText(stringifyPrompt(structured.user)) ?? '';
 
   extension_settings[SETTINGS_KEY].scene = scene;
   extension_settings[SETTINGS_KEY].character = character;
