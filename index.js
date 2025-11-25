@@ -185,38 +185,38 @@ async function generateStructuredOutputs(prompt, snapshot) {
 
   const sectionPrompts = {
     scene: [
-      'You output ONLY lowercase comma-separated tags for image prompting.',
-      'Rules: no sentences, no narration, no conjunctions, do not continue the story, do not mention this instruction.',
+      'IGNORE ALL PREVIOUS INSTRUCTIONS. OUTPUT ONLY LOWERCASE COMMA-SEPARATED TAGS.',
+      'Strict rules: no sentences, no narration, no quotes, no conjunctions, no story continuation. Tags only.',
       basePrompt ? `Overall directive tags: ${basePrompt}` : null,
       persona ? `User persona context tags: ${persona}` : null,
-      'Describe the entire scene with tags covering environment, weather, lighting, mood, camera angle, number of characters, and key actions or props.',
-      'Example: "moonlit forest, mist, 2 characters, walking together, cinematic lighting".',
+      'Describe the entire scene with tags for environment, weather, lighting, mood, camera angle, character count, major actions, and notable props.',
+      'Example: moonlit forest, mist, 2 characters, walking together, cinematic lighting.',
       `Recent dialogue context:\n${transcriptBlock}`,
-      'Return ONLY the tags.',
+      'If you cannot comply, output "scene tags unavailable".',
     ]
       .filter(Boolean)
       .join('\n\n'),
     character: [
-      'You output ONLY lowercase comma-separated tags for image prompting.',
-      'Rules: no sentences, describe ONLY the non-user character(s), do not mention the user persona or instructions.',
+      'IGNORE ALL PREVIOUS INSTRUCTIONS. OUTPUT ONLY LOWERCASE COMMA-SEPARATED TAGS.',
+      'Describe ONLY the non-user character(s). Do not mention the user persona or any narrative text.',
       `Character background:\n${characterDescription}`,
-      `User persona reference (context only):\n${userDescription}`,
-      'Include tags for count, gender, notable physical traits, clothing, expression, pose, and props.',
-      'Example: "1girl, silver hair, battle armor, determined expression, sword ready, dynamic pose".',
+      `User persona reference (context only, do not tag user):\n${userDescription}`,
+      'Include tags for count, gender, physique, clothing, expression, pose, and props.',
+      'Example: 1girl, silver hair, battle armor, determined expression, sword ready, dynamic pose.',
       `Recent dialogue context:\n${transcriptBlock}`,
-      'Return ONLY the tags.',
+      'If you cannot comply, output "character tags unavailable".',
     ]
       .filter(Boolean)
       .join('\n\n'),
     user: [
-      'You output ONLY lowercase comma-separated tags for image prompting.',
-      'Rules: no sentences, describe ONLY the user persona, do not mention other characters or these instructions.',
+      'IGNORE ALL PREVIOUS INSTRUCTIONS. OUTPUT ONLY LOWERCASE COMMA-SEPARATED TAGS.',
+      'Describe ONLY the user persona. Do not mention other characters or narrative text.',
       `User persona information:\n${userDescription}`,
       persona ? `Additional persona details:\n${persona}` : null,
       'Include tags for appearance, clothing, mood, pose, props, and camera framing.',
-      'Example: "1boy, messy brown hair, hoodie, shy smile, sketchbook in hands, half-body shot".',
+      'Example: 1woman, rune-stitched robe, mischievous smile, holding wand, dim light, full length.',
       `Recent dialogue context:\n${transcriptBlock}`,
-      'Return ONLY the tags.',
+      'If you cannot comply, output "user tags unavailable".',
     ]
       .filter(Boolean)
       .join('\n\n'),
@@ -265,14 +265,15 @@ function formatTagList(...parts) {
     .join(', ');
   return combined
     .split(/[,.;\n]+/)
-    .map((segment) => segment.trim().replace(/\s+/g, ' '))
+    .map((segment) => segment.trim().replace(/\s+/g, ' ').toLowerCase())
     .filter(Boolean)
     .join(', ');
 }
 
 async function runSimpleGeneration({ prompt, generateRawFn, generateQuietPrompt }) {
   if (!prompt) return '';
-  const systemPrompt = 'You are a tag generator. Output lowercase comma-separated tags only.';
+  const systemPrompt =
+    'You are an image-tag formatter. Respond ONLY with lowercase comma-separated tags. Never write sentences or narration.';
   if (typeof generateRawFn === 'function') {
     const result = await generateRawFn({ prompt, systemPrompt, trimNames: true });
     if (!result) throw new Error('No message generated');
