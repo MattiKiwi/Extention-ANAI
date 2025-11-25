@@ -1,6 +1,8 @@
 import { saveSettingsDebounced } from '../../../../script.js';
 import { debounce } from '../../../utils.js';
 import { extension_settings, getContext, renderExtensionTemplateAsync } from '../../../extensions.js';
+import { power_user } from '../../../power-user.js';
+import { getUserAvatar, getUserAvatars, setUserAvatar, user_avatar } from '../../../personas.js';
 
 const FALLBACK_EXTENSION_PATH = 'third-party/advanced-image-gen';
 const SETTINGS_KEY = 'advanced_nai_image';
@@ -80,6 +82,7 @@ function bindButtons(root) {
       console.log('Recent messages:', snapshot.messages);
       console.log('User description:', snapshot.userDescription);
       console.log('Character description:', snapshot.characterDescription);
+      console.log('Persona context:', snapshot.persona);
       console.groupEnd();
     });
 
@@ -141,11 +144,14 @@ jQuery(async () => {
 
 function captureContextSnapshot() {
   const context = getSTContext();
+  const powerUser = getPowerUserSettings(context);
+  const persona = getPersonaContext(powerUser);
   if (!context) {
     return {
       messages: [],
-      userDescription: null,
+      userDescription: persona?.description ?? null,
       characterDescription: null,
+      persona,
     };
   }
 
@@ -164,8 +170,9 @@ function captureContextSnapshot() {
 
   return {
     messages,
-    userDescription: getUserDescription(context),
+    userDescription: getUserDescription(context, powerUser, persona),
     characterDescription: getCharacterDescription(context),
+    persona,
   };
 }
 
@@ -204,16 +211,34 @@ function getPowerUserSettings(context) {
   return (
     context?.powerUserSettings ||
     context?.power_user ||
+    power_user ||
     globalThis.power_user ||
     null
   );
 }
 
-function getUserDescription(context) {
-  if (!context) return null;
+function getPersonaContext(powerUser) {
+  const personaId = typeof user_avatar === 'string' && user_avatar.length ? user_avatar : null;
+  const descriptor = personaId ? powerUser?.persona_descriptions?.[personaId] : null;
+  const description = normalizeText(descriptor?.description);
+  const name = personaId ? powerUser?.personas?.[personaId] ?? null : null;
+  const avatarPath = personaId ? getUserAvatar(personaId) : null;
 
-  const powerUser = getPowerUserSettings(context);
+  return {
+    id: personaId,
+    name,
+    description: description ?? null,
+    avatar: avatarPath,
+    refreshPersonas: getUserAvatars,
+    setPersona: setUserAvatar,
+  };
+}
+
+function getUserDescription(context, powerUser = getPowerUserSettings(context), persona = getPersonaContext(powerUser)) {
+  if (!context && !persona?.description) return null;
+
   const personaSources = [
+    persona?.description,
     powerUser?.persona_description,
     powerUser?.personaDescription,
     context?.persona_description,
