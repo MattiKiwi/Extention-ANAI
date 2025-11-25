@@ -1,4 +1,4 @@
-import { saveSettingsDebounced } from '../../../../script.js';
+import { saveSettingsDebounced, generateRaw as coreGenerateRaw } from '../../../../script.js';
 import { debounce } from '../../../utils.js';
 import { extension_settings, getContext, renderExtensionTemplateAsync } from '../../../extensions.js';
 import { power_user } from '../../../power-user.js';
@@ -167,8 +167,8 @@ async function handleGenerateDescriptionClick(root) {
 async function generateStructuredOutputs(prompt, snapshot) {
   const context = getSTContext();
   const generateQuietPrompt = context?.generateQuietPrompt;
-  const generateRaw = context?.generateRaw;
-  if (typeof generateQuietPrompt !== 'function' && typeof generateRaw !== 'function') {
+  const generateRawFn = context?.generateRaw ?? coreGenerateRaw;
+  if (typeof generateQuietPrompt !== 'function' && typeof generateRawFn !== 'function') {
     console.warn(`${LOG_PREFIX} Neither generateQuietPrompt nor generateRaw are available in the current context.`);
     return null;
   }
@@ -190,8 +190,8 @@ async function generateStructuredOutputs(prompt, snapshot) {
 
   let rawResult = null;
   try {
-    if (typeof generateRaw === 'function') {
-      rawResult = await generateRaw({
+    if (typeof generateRawFn === 'function') {
+      rawResult = await generateRawFn({
         prompt: structuredPrompt,
         jsonSchema,
       });
