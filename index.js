@@ -227,6 +227,14 @@ function getUserDescription(context) {
     if (normalized) return normalized;
   }
 
+  if (typeof context?.getCharacterCardFields === 'function') {
+    const cardFields = context.getCharacterCardFields({
+      chid: context?.characterId ?? context?.character_id ?? null,
+    });
+    const persona = normalizeText(cardFields?.persona);
+    if (persona) return persona;
+  }
+
   const userCard = getUserCard(context);
   return extractCardDescription(userCard);
 }
