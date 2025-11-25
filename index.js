@@ -172,7 +172,11 @@ async function generateStructuredOutputs(prompt, snapshot) {
     return null;
   }
 
-  const quietPrompt = buildStructuredPrompt(prompt, snapshot);
+  const quietPromptRaw = buildStructuredPrompt(prompt, snapshot);
+  const quietPrompt =
+    typeof quietPromptRaw === 'string'
+      ? quietPromptRaw
+      : JSON.stringify(quietPromptRaw, null, 2);
   const jsonSchema = getStructuredOutputSchema();
 
   let rawResult = null;
