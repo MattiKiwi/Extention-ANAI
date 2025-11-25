@@ -183,35 +183,186 @@ function getSTContext() {
 }
 
 function getActiveCharacterCard(context) {
-  if (!Array.isArray(context?.characters)) return null;
+  const list = flattenCollection(context?.characters);
+  if (!list.length) return null;
+
   const idx = Number(context?.characterId);
-  if (Number.isInteger(idx) && idx >= 0 && idx < context.characters.length) {
-    return context.characters[idx] || null;
+  if (Number.isInteger(idx) && idx >= 0 && idx < list.length) {
+    return list[idx] || null;
   }
-  return null;
+
+  if (typeof context?.characterId === 'string') {
+    const match =
+      list.find(
+        (character) =>
+          character?.avatar === context.characterId || character?.id === context.characterId,
+      ) || null;
+    if (match) return match;
+  }
+
+  return list[0] || null;
 }
 
 function getUserCard(context) {
   if (context?.user) return context.user;
-  if (Array.isArray(context?.characters)) {
-    const userCandidate = context.characters.find(
-      (character) =>
-        character?.is_user ||
-        character?.isUser ||
-        character?.user === true ||
-        character?.data?.role === 'user',
-    );
-    if (userCandidate) return userCandidate;
+  if (context?.userCard) return context.userCard;
+  const profileCard = getProfileCard(context);
+  if (profileCard) return profileCard;
+
+  const nameHints = new Set(
+    [context?.name1, context?.user_name, context?.userName, context?.username]
+      .filter((value) => typeof value === 'string' && value.trim().length > 0)
+      .map((value) => value.trim().toLowerCase()),
+  );
+
+  const candidates = [
+    ...flattenCollection(context?.characters),
+    ...flattenCollection(context?.characterCache),
+    ...flattenCollection(context?.groupCharacters),
+  ];
+
+  const match = candidates.find((character) => isUserCharacter(character, nameHints));
+  if (match) return match;
+
+  if (
+    context?.persona ||
+    context?.persona_description ||
+    context?.user_definition ||
+    context?.userDefinition
+  ) {
+    return {
+      name: context?.name1 || 'User',
+      data: {
+        description:
+          context?.persona_description ??
+          context?.persona ??
+          context?.user_definition ??
+          context?.userDefinition ??
+          null,
+      },
+    };
   }
+
   return null;
+}
+
+function flattenCollection(collection) {
+  if (!collection) return [];
+  if (collection instanceof Map) {
+    return Array.from(collection.values()).filter(Boolean);
+  }
+  if (Array.isArray(collection)) {
+    return collection.filter(Boolean);
+  }
+  if (typeof collection === 'object') {
+    return Object.values(collection).filter(Boolean);
+  }
+  return [];
+}
+
+function isUserCharacter(character, nameHints) {
+  if (!character) return false;
+  if (
+    character.is_user ||
+    character.isUser ||
+    character.isYou ||
+    character.user === true ||
+    character.type === 'user' ||
+    character.role === 'user' ||
+    character.data?.role === 'user'
+  ) {
+    return true;
+  }
+  const normalized = normalizeName(character);
+  if (normalized && nameHints.has(normalized)) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeName(character) {
+  const value =
+    character?.name ||
+    character?.display_name ||
+    character?.title ||
+    character?.data?.name ||
+    character?.data?.display_name;
+  return typeof value === 'string' ? value.trim().toLowerCase() : null;
+}
+
+function getProfileCard(context) {
+  const profileManager = context?.profile_manager ?? context?.profileManager;
+  const managerProfiles = flattenCollection(profileManager?.profiles);
+  const fallbackProfiles = managerProfiles.length
+    ? []
+    : flattenCollection(context?.profiles);
+  const profilesSource = managerProfiles.length ? managerProfiles : fallbackProfiles;
+  const profileId =
+    profileManager?.currentProfile ??
+    profileManager?.selectedProfile ??
+    profileManager?.activeProfile ??
+    context?.profileId ??
+    context?.profile_id;
+
+  let activeProfile = null;
+  if (profileId != null) {
+    activeProfile =
+      (Array.isArray(profileManager?.profiles)
+        ? profileManager.profiles.find((profile) => profile?.id === profileId)
+        : profileManager?.profiles?.[profileId]) ??
+      (Array.isArray(context?.profiles)
+        ? context.profiles.find((profile) => profile?.id === profileId)
+        : context?.profiles?.[profileId]);
+  }
+
+  if (!activeProfile) {
+    activeProfile =
+      profilesSource.find((profile) => profile?.selected) ??
+      profilesSource.find((profile) => profile?.isDefault) ??
+      profilesSource[0] ??
+      null;
+  }
+
+  if (!activeProfile) return null;
+
+  const description =
+    activeProfile?.description ??
+    activeProfile?.persona ??
+    activeProfile?.bio ??
+    activeProfile?.profile ??
+    activeProfile?.prompt ??
+    activeProfile?.data?.description ??
+    null;
+
+  return {
+    name:
+      activeProfile?.name ||
+      activeProfile?.title ||
+      activeProfile?.displayName ||
+      context?.name1 ||
+      'User',
+    data: {
+      description: description ?? null,
+    },
+  };
 }
 
 function extractCardDescription(card) {
   if (!card) return null;
-  return (
-    card.data?.description ??
-    card.data?.description_full ??
-    card.description ??
-    null
-  );
+  const fields = [
+    card.data?.description,
+    card.data?.description_full,
+    card.data?.persona,
+    card.data?.personality,
+    card.data?.bio,
+    card.description,
+    card.persona,
+    card.bio,
+  ];
+  for (const field of fields) {
+    if (typeof field === 'string' && field.trim()) {
+      return field.trim();
+    }
+  }
+  return null;
 }
