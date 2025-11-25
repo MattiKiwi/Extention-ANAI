@@ -294,10 +294,15 @@ function getPowerUserSettings(context) {
     globalThis.power_user ||
     globalThis.powerUser ||
     globalThis?.SillyTavern?.power_user ||
+    globalThis?.settings?.power_user ||
     null;
 
   if (globalPowerUser) {
     return globalPowerUser;
+  }
+
+  if (context?.settings?.power_user) {
+    return context.settings.power_user;
   }
 
   return context?.extensionSettings?.power_user ?? null;
