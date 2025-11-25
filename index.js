@@ -210,22 +210,22 @@ async function generateStructuredOutputs(prompt, snapshot) {
       .join('\n\n'),
   };
 
-  const results = {};
-
-  for (const [section, sectionPrompt] of Object.entries(sectionPrompts)) {
-    try {
-      const generated = await runSimpleGeneration(sectionPrompt, generateRawFn, generateQuietPrompt);
-      results[section] = normalizeText(generated) ?? '';
-    } catch (error) {
-      console.warn(`${LOG_PREFIX} Failed to generate ${section} description. Falling back.`, error);
-      results[section] = '';
-    }
-  }
+  const [scene, character, user] = await Promise.all(
+    Object.entries(sectionPrompts).map(async ([section, sectionPrompt]) => {
+      try {
+        const generated = await runSimpleGeneration(sectionPrompt, generateRawFn, generateQuietPrompt);
+        return normalizeText(generated) ?? '';
+      } catch (error) {
+        console.warn(`${LOG_PREFIX} Failed to generate ${section} description. Falling back.`, error);
+        return '';
+      }
+    }),
+  );
 
   return {
-    scene: results.scene || buildFallbackScene(basePrompt, transcriptBlock),
-    character: results.character || characterDescription,
-    user: results.user || userDescription,
+    scene: scene || buildFallbackScene(basePrompt, transcriptBlock),
+    character: character || characterDescription,
+    user: user || userDescription,
   };
 }
 
@@ -245,10 +245,14 @@ function stringifyPrompt(value) {
 async function runSimpleGeneration(prompt, generateRawFn, generateQuietPrompt) {
   if (!prompt) return '';
   if (typeof generateRawFn === 'function') {
-    return generateRawFn({ prompt });
+    const result = await generateRawFn({ prompt });
+    if (!result) throw new Error('No message generated');
+    return result;
   }
   if (typeof generateQuietPrompt === 'function') {
-    return generateQuietPrompt({ quietPrompt: prompt });
+    const result = await generateQuietPrompt({ quietPrompt: prompt });
+    if (!result) throw new Error('No message generated');
+    return result;
   }
   return '';
 }
