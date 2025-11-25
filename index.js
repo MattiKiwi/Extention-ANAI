@@ -210,22 +210,22 @@ async function generateStructuredOutputs(prompt, snapshot) {
       .join('\n\n'),
   };
 
-  const [scene, character, user] = await Promise.all(
-    Object.entries(sectionPrompts).map(async ([section, sectionPrompt]) => {
-      try {
-        const generated = await runSimpleGeneration(sectionPrompt, generateRawFn, generateQuietPrompt);
-        return normalizeText(generated) ?? '';
-      } catch (error) {
-        console.warn(`${LOG_PREFIX} Failed to generate ${section} description. Falling back.`, error);
-        return '';
-      }
-    }),
-  );
+  const outputs = { scene: '', character: '', user: '' };
+
+  for (const [section, sectionPrompt] of Object.entries(sectionPrompts)) {
+    try {
+      const generated = await runSimpleGeneration(sectionPrompt, generateRawFn, generateQuietPrompt);
+      outputs[section] = normalizeText(generated) ?? '';
+    } catch (error) {
+      console.warn(`${LOG_PREFIX} Failed to generate ${section} description. Falling back.`, error);
+      outputs[section] = '';
+    }
+  }
 
   return {
-    scene: scene || buildFallbackScene(basePrompt, transcriptBlock),
-    character: character || characterDescription,
-    user: user || userDescription,
+    scene: outputs.scene || buildFallbackScene(basePrompt, transcriptBlock),
+    character: outputs.character || characterDescription,
+    user: outputs.user || userDescription,
   };
 }
 
