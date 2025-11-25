@@ -80,9 +80,6 @@ function bindButtons(root) {
       console.log('Recent messages:', snapshot.messages);
       console.log('User description:', snapshot.userDescription);
       console.log('Character description:', snapshot.characterDescription);
-      if (snapshot.debug) {
-        console.debug(`${LOG_PREFIX} Context diagnostics`, snapshot.debug);
-      }
       console.groupEnd();
     });
 
@@ -149,7 +146,6 @@ function captureContextSnapshot() {
       messages: [],
       userDescription: null,
       characterDescription: null,
-      debug: null,
     };
   }
 
@@ -170,7 +166,6 @@ function captureContextSnapshot() {
     messages,
     userDescription: getUserDescription(context),
     characterDescription: getCharacterDescription(context),
-    debug: buildContextDiagnostics(context),
   };
 }
 
@@ -184,98 +179,238 @@ function getSTContext() {
   return null;
 }
 
-function getUserDescription(context) {
-  const settings = getPowerUserSettings(context);
-  if (!settings) return null;
+function getActiveCharacterCard(context) {
+  const list = flattenCollection(context?.characters);
+  if (!list.length) return null;
 
-  const directDescription = normalizeText(settings.persona_description);
-  if (directDescription) return directDescription;
-
-  const personaDescriptor = resolvePersonaDescriptor(settings, context?.chatMetadata);
-  const descriptorDescription = personaDescriptor && normalizeText(personaDescriptor.description);
-  if (descriptorDescription) return descriptorDescription;
-
-  const fallbackFields = [
-    settings.persona,
-    settings.persona_definition,
-    settings.personaDefinition,
-    settings.user_definition,
-    settings.userDefinition,
-  ];
-
-  for (const field of fallbackFields) {
-    const candidate = normalizeText(field);
-    if (candidate) return candidate;
+  const idx = Number(context?.characterId);
+  if (Number.isInteger(idx) && idx >= 0 && idx < list.length) {
+    return list[idx] || null;
   }
 
-  return null;
+  if (typeof context?.characterId === 'string') {
+    const match =
+      list.find(
+        (character) =>
+          character?.avatar === context.characterId || character?.id === context.characterId,
+      ) || null;
+    if (match) return match;
+  }
+
+  return list[0] || null;
 }
 
-function resolvePersonaDescriptor(settings, chatMetadata) {
-  const descriptors = settings?.persona_descriptions;
-  if (!descriptors || typeof descriptors !== 'object') return null;
+function getPowerUserSettings(context) {
+  return (
+    context?.powerUserSettings ||
+    context?.power_user ||
+    globalThis.power_user ||
+    null
+  );
+}
 
-  const preferredIds = [
-    chatMetadata?.persona,
-    settings?.default_persona,
-  ].filter((id) => typeof id === 'string' && id in descriptors);
+function getUserDescription(context) {
+  if (!context) return null;
 
-  const searchOrder = preferredIds.length ? preferredIds : Object.keys(descriptors);
-  for (const id of searchOrder) {
-    const descriptor = descriptors[id];
-    if (descriptor && typeof descriptor === 'object') {
-      return descriptor;
-    }
+  const powerUser = getPowerUserSettings(context);
+  const personaSources = [
+    powerUser?.persona_description,
+    powerUser?.personaDescription,
+    context?.persona_description,
+    context?.personaDescription,
+    context?.user_definition,
+    context?.userDefinition,
+  ];
+
+  for (const value of personaSources) {
+    const normalized = normalizeText(value);
+    if (normalized) return normalized;
   }
 
-  return null;
+  const userCard = getUserCard(context);
+  return extractCardDescription(userCard);
 }
 
 function getCharacterDescription(context) {
-  const character = resolveCharacter(context);
-  if (!character) return null;
+  if (!context) return null;
+  const characterCard = getActiveCharacterCard(context);
+  const description = extractCardDescription(characterCard);
+  if (description) return description;
 
-  const fields = [
-    character.description,
-    character.data?.description,
-    character.data?.persona,
-    character.personality,
-    character.data?.personality,
-    character.data?.extensions?.depth_prompt?.prompt,
-    character.scenario,
-    character.data?.scenario,
+  const fallbacks = [
+    context?.character_description,
+    context?.characterDescription,
+    context?.description,
   ];
 
-  for (const field of fields) {
-    const text = normalizeText(field);
-    if (text) return text;
+  for (const value of fallbacks) {
+    const normalized = normalizeText(value);
+    if (normalized) return normalized;
   }
 
   return null;
 }
 
-function resolveCharacter(context) {
-  const list = context?.characters;
-  if (!list) return null;
+function getUserCard(context) {
+  if (context?.user) return context.user;
+  if (context?.userCard) return context.userCard;
+  const profileCard = getProfileCard(context);
+  if (profileCard) return profileCard;
 
-  const characterId = context?.characterId;
-  if (Array.isArray(list)) {
-    const idx = Number(characterId);
-    if (Number.isInteger(idx) && idx >= 0 && idx < list.length) {
-      return list[idx];
-    }
+  const nameHints = new Set(
+    [context?.name1, context?.user_name, context?.userName, context?.username]
+      .filter((value) => typeof value === 'string' && value.trim().length > 0)
+      .map((value) => value.trim().toLowerCase()),
+  );
+
+  const candidates = [
+    ...flattenCollection(context?.characters),
+    ...flattenCollection(context?.characterCache),
+    ...flattenCollection(context?.groupCharacters),
+  ];
+
+  const match = candidates.find((character) => isUserCharacter(character, nameHints));
+  if (match) return match;
+
+  if (
+    context?.persona ||
+    context?.persona_description ||
+    context?.user_definition ||
+    context?.userDefinition
+  ) {
+    return {
+      name: context?.name1 || 'User',
+      data: {
+        description:
+          context?.persona_description ??
+          context?.persona ??
+          context?.user_definition ??
+          context?.userDefinition ??
+          null,
+      },
+    };
+  }
+  return null;
+}
+
+function flattenCollection(collection) {
+  if (!collection) return [];
+  if (collection instanceof Map) {
+    return Array.from(collection.values()).filter(Boolean);
+  }
+  if (Array.isArray(collection)) {
+    return collection.filter(Boolean);
+  }
+  if (typeof collection === 'object') {
+    return Object.values(collection).filter(Boolean);
+  }
+  return [];
+}
+
+function isUserCharacter(character, nameHints) {
+  if (!character) return false;
+  if (
+    character.is_user ||
+    character.isUser ||
+    character.isYou ||
+    character.user === true ||
+    character.type === 'user' ||
+    character.role === 'user' ||
+    character.data?.role === 'user'
+  ) {
+    return true;
+  }
+  const normalized = normalizeName(character);
+  if (normalized && nameHints.has(normalized)) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeName(character) {
+  const value =
+    character?.name ||
+    character?.display_name ||
+    character?.title ||
+    character?.data?.name ||
+    character?.data?.display_name;
+  return typeof value === 'string' ? value.trim().toLowerCase() : null;
+}
+
+function getProfileCard(context) {
+  const profileManager = context?.profile_manager ?? context?.profileManager;
+  const managerProfiles = flattenCollection(profileManager?.profiles);
+  const fallbackProfiles = managerProfiles.length
+    ? []
+    : flattenCollection(context?.profiles);
+  const profilesSource = managerProfiles.length ? managerProfiles : fallbackProfiles;
+  const profileId =
+    profileManager?.currentProfile ??
+    profileManager?.selectedProfile ??
+    profileManager?.activeProfile ??
+    context?.profileId ??
+    context?.profile_id;
+
+  let activeProfile = null;
+  if (profileId != null) {
+    activeProfile =
+      (Array.isArray(profileManager?.profiles)
+        ? profileManager.profiles.find((profile) => profile?.id === profileId)
+        : profileManager?.profiles?.[profileId]) ??
+      (Array.isArray(context?.profiles)
+        ? context.profiles.find((profile) => profile?.id === profileId)
+        : context?.profiles?.[profileId]);
   }
 
-  if (typeof list === 'object') {
-    if (characterId && list[characterId]) {
-      return list[characterId];
-    }
-    const numericKey = Number(characterId);
-    if (!Number.isNaN(numericKey) && list[numericKey]) {
-      return list[numericKey];
-    }
+  if (!activeProfile) {
+    activeProfile =
+      profilesSource.find((profile) => profile?.selected) ??
+      profilesSource.find((profile) => profile?.isDefault) ??
+      profilesSource[0] ??
+      null;
   }
 
+  if (!activeProfile) return null;
+
+  const description =
+    activeProfile?.description ??
+    activeProfile?.persona ??
+    activeProfile?.bio ??
+    activeProfile?.profile ??
+    activeProfile?.prompt ??
+    activeProfile?.data?.description ??
+    null;
+
+  return {
+    name:
+      activeProfile?.name ||
+      activeProfile?.title ||
+      activeProfile?.displayName ||
+      context?.name1 ||
+      'User',
+    data: {
+      description: description ?? null,
+    },
+  };
+}
+
+function extractCardDescription(card) {
+  if (!card) return null;
+  const fields = [
+    card.data?.description,
+    card.data?.description_full,
+    card.data?.persona,
+    card.data?.personality,
+    card.data?.bio,
+    card.description,
+    card.persona,
+    card.bio,
+  ];
+  for (const field of fields) {
+    if (typeof field === 'string' && field.trim()) {
+      return field.trim();
+    }
+  }
   return null;
 }
 
@@ -283,72 +418,4 @@ function normalizeText(value) {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : null;
-}
-
-function getPowerUserSettings(context) {
-  if (context?.powerUserSettings) {
-    return context.powerUserSettings;
-  }
-
-  const globalPowerUser =
-    globalThis.power_user ||
-    globalThis.powerUser ||
-    globalThis?.SillyTavern?.power_user ||
-    globalThis?.settings?.power_user ||
-    null;
-
-  if (globalPowerUser) {
-    return globalPowerUser;
-  }
-
-  if (context?.settings?.power_user) {
-    return context.settings.power_user;
-  }
-
-  return context?.extensionSettings?.power_user ?? null;
-}
-
-function buildContextDiagnostics(context) {
-  try {
-    const powerUser = getPowerUserSettings(context);
-    const descriptors = powerUser?.persona_descriptions;
-    const descriptorKeys = descriptors && typeof descriptors === 'object' ? Object.keys(descriptors) : [];
-    const characters = context?.characters;
-    const characterSummary = [];
-    if (Array.isArray(characters)) {
-      characters.forEach((character, index) => {
-        if (character) {
-          characterSummary.push({
-            index,
-            name: character.name ?? character.data?.name ?? null,
-            avatar: character.avatar ?? null,
-          });
-        }
-      });
-    } else if (characters && typeof characters === 'object') {
-      Object.keys(characters).forEach((key) => {
-        const character = characters[key];
-        if (character) {
-          characterSummary.push({
-            key,
-            name: character.name ?? character.data?.name ?? null,
-            avatar: character.avatar ?? null,
-          });
-        }
-      });
-    }
-    return {
-      hasPowerUserSettings: Boolean(powerUser),
-      personaDescription: powerUser?.persona_description ?? null,
-      personaDescriptorKeys: descriptorKeys.slice(0, 5),
-      personaDescriptorCount: descriptorKeys.length,
-      defaultPersona: powerUser?.default_persona ?? null,
-      chatPersona: context?.chatMetadata?.persona ?? null,
-      characterId: context?.characterId ?? null,
-      availableCharacterCount: characterSummary.length,
-      sampleCharacters: characterSummary.slice(0, 5),
-    };
-  } catch (error) {
-    return { error: String(error) };
-  }
 }
