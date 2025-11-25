@@ -1,166 +1,112 @@
-(() => {
-  const EXTENSION_ID = 'advanced-nai-image';
-  const EXTENSION_NAME = 'Advanced NAI Image';
-  const ROOT_ID = 'ani-ext-root';
-  const SETTINGS_PANES = ['#extensions_settings2', '#extensions_settings'];
+import { saveSettingsDebounced } from '../../../../script.js';
+import { debounce } from '../../../utils.js';
+import { extension_settings, renderExtensionTemplateAsync } from '../../../extensions.js';
 
-  let observer;
+const EXTENSION_NAME = 'third-party/advanced-image-gen';
+const SETTINGS_KEY = 'advanced_nai_image';
+const ROOT_ID = 'ani_container';
 
-  const layout = `
-<div id="${ROOT_ID}" class="ani-ext">
-  <div class="inline-drawer">
-    <div class="inline-drawer-toggle inline-drawer-header" title="Advanced Novel AI Image UI">
-      <b>Advanced NAI Image (UI)</b>
-      <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
-    </div>
-    <div class="inline-drawer-content">
-      <div class="ani-form">
+const defaultSettings = {
+  prompt: '',
+  scene: '',
+  character: '',
+  user: '',
+};
 
-        <!-- 1) Prompt used to generate the scene description -->
-        <div class="ani-block">
-          <label class="ani-label" for="ani-prompt">Prompt for scene description</label>
-          <textarea id="ani-prompt" class="text_pole textarea_compact" rows="3"
-            placeholder="e.g., Summarize chapter into a vivid scene setup…"></textarea>
-        </div>
-
-        <!-- 2) Scene description -->
-        <div class="ani-block">
-          <label class="ani-label" for="ani-scene">Scene description</label>
-          <textarea id="ani-scene" class="text_pole textarea_compact" rows="4"
-            placeholder="A windswept cliff at dusk…"></textarea>
-        </div>
-
-        <!-- 3–4) Character descriptions -->
-        <div class="ani-grid">
-          <div class="ani-block">
-            <label class="ani-label" for="ani-char">Character description (character)</label>
-            <textarea id="ani-char" class="text_pole textarea_compact" rows="3"
-              placeholder="The rogue: lean, scar over left brow…"></textarea>
-          </div>
-          <div class="ani-block">
-            <label class="ani-label" for="ani-user">Character description (user)</label>
-            <textarea id="ani-user" class="text_pole textarea_compact" rows="3"
-              placeholder="The user avatar / self-insert…"></textarea>
-          </div>
-        </div>
-
-        <!-- Actions -->
-        <div class="ani-actions">
-          <button id="ani-generate-desc" class="menu_button" type="button">Generate Description</button>
-          <button id="ani-generate-image" class="menu_button" type="button">Generate Image</button>
-        </div>
-
-      </div>
-    </div>
-  </div>
-</div>
-`.trim();
-
-  function getSettingsPane() {
-    for (const selector of SETTINGS_PANES) {
-      const pane = document.querySelector(selector);
-      if (pane) return pane;
-    }
-    return null;
+function ensureSettings() {
+  if (!extension_settings[SETTINGS_KEY]) {
+    extension_settings[SETTINGS_KEY] = { ...defaultSettings };
+    return;
   }
 
-  function wireEvents(host) {
-    const promptInput = host.querySelector('#ani-prompt');
-    const sceneInput = host.querySelector('#ani-scene');
-    const characterInput = host.querySelector('#ani-char');
-    const userInput = host.querySelector('#ani-user');
-    const descriptionButton = host.querySelector('#ani-generate-desc');
-    const imageButton = host.querySelector('#ani-generate-image');
-
-    descriptionButton?.addEventListener('click', () => {
-      const prompt = promptInput?.value || '';
-      console.log(`[${EXTENSION_NAME}] Generate Description — prompt:`, prompt);
-    });
-
-    imageButton?.addEventListener('click', () => {
-      const payload = {
-        scene: sceneInput?.value || '',
-        character: characterInput?.value || '',
-        user: userInput?.value || '',
-      };
-      console.log(`[${EXTENSION_NAME}] Generate Image — inputs:`, payload);
-    });
-  }
-
-  function mount() {
-    const settingsPane = getSettingsPane();
-    if (!settingsPane) return false;
-    if (settingsPane.querySelector(`#${ROOT_ID}`)) return true;
-
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = layout;
-    const root = wrapper.firstElementChild;
-    if (!root) return false;
-
-    settingsPane.appendChild(root);
-    wireEvents(root);
-
-    return true;
-  }
-
-  function enableObserver() {
-    if (observer || !document.body) return;
-    observer = new MutationObserver(() => {
-      mount();
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  }
-
-  async function init() {
-    try {
-      if (document.body) {
-        mount();
-        enableObserver();
-      } else {
-        document.addEventListener(
-          'DOMContentLoaded',
-          () => {
-            mount();
-            enableObserver();
-          },
-          { once: true },
-        );
-      }
-      return true;
-    } catch (error) {
-      console.error(`[${EXTENSION_NAME}] Failed to initialize`, error);
-      return false;
+  for (const [key, value] of Object.entries(defaultSettings)) {
+    if (!(key in extension_settings[SETTINGS_KEY])) {
+      extension_settings[SETTINGS_KEY][key] = value;
     }
   }
+}
 
-  function unload() {
-    observer?.disconnect();
-    observer = undefined;
-    document.getElementById(ROOT_ID)?.remove();
-  }
+function populateUI(root) {
+  const settings = extension_settings[SETTINGS_KEY];
+  $(root)
+    .find('#ani-prompt')
+    .val(settings.prompt ?? '');
+  $(root)
+    .find('#ani-scene')
+    .val(settings.scene ?? '');
+  $(root)
+    .find('#ani-char')
+    .val(settings.character ?? '');
+  $(root)
+    .find('#ani-user')
+    .val(settings.user ?? '');
+}
 
-  function register(attempt = 0) {
-    if (typeof registerExtension === 'function') {
-      registerExtension({
-        name: EXTENSION_ID,
-        fullName: EXTENSION_NAME,
-        version: '0.1.0',
-        init,
-        unload,
+function bindField(root, selector, key) {
+  $(root)
+    .find(selector)
+    .on(
+      'input',
+      debounce((event) => {
+        extension_settings[SETTINGS_KEY][key] = event.target.value;
+        saveSettingsDebounced();
+      }, 250),
+    );
+}
+
+function bindButtons(root) {
+  $(root)
+    .find('#ani-generate-desc')
+    .on('click', () => {
+      const prompt = extension_settings[SETTINGS_KEY].prompt || '';
+      console.log('[Advanced NAI Image] Generate Description', { prompt });
+    });
+
+  $(root)
+    .find('#ani-generate-image')
+    .on('click', () => {
+      const settings = extension_settings[SETTINGS_KEY];
+      console.log('[Advanced NAI Image] Generate Image', {
+        scene: settings.scene,
+        character: settings.character,
+        user: settings.user,
       });
-      return;
-    }
+    });
+}
 
-    if (attempt > 20) {
-      console.error(
-        `[${EXTENSION_NAME}] Could not find registerExtension(); giving up.`,
-      );
-      return;
-    }
+function removeExistingUI() {
+  document.getElementById(ROOT_ID)?.remove();
+}
 
-    // registerExtension might not be defined yet; wait for ST to finish booting.
-    setTimeout(() => register(attempt + 1), 250);
+async function mountUI() {
+  const container =
+    document.getElementById('extensions_settings2') ??
+    document.getElementById('extensions_settings');
+
+  if (!container) {
+    console.warn('[Advanced NAI Image] Could not find settings panel to mount UI.');
+    return;
   }
 
-  register();
-})();
+  removeExistingUI();
+  const html = await renderExtensionTemplateAsync(EXTENSION_NAME, 'dropdown');
+  container.insertAdjacentHTML('beforeend', html);
+
+  const root = document.getElementById(ROOT_ID);
+  if (!root) {
+    console.error('[Advanced NAI Image] Failed to render UI template.');
+    return;
+  }
+
+  populateUI(root);
+  bindField(root, '#ani-prompt', 'prompt');
+  bindField(root, '#ani-scene', 'scene');
+  bindField(root, '#ani-char', 'character');
+  bindField(root, '#ani-user', 'user');
+  bindButtons(root);
+}
+
+jQuery(async () => {
+  ensureSettings();
+  await mountUI();
+});

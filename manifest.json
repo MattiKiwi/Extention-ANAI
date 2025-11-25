@@ -1,6 +1,8 @@
 {
   "display_name": "Advanced NAI Image",
   "loading_order": 9,
+  "requires": [],
+  "optional": [],
   "author": "Kiwi",
   "version": "0.1.0",
   "js": "index.js",
