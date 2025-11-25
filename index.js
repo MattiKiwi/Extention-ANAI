@@ -168,45 +168,65 @@ async function generateStructuredOutputs(prompt, snapshot) {
   const context = getSTContext();
   const generateQuietPrompt = context?.generateQuietPrompt;
   const generateRawFn = context?.generateRaw ?? coreGenerateRaw;
+
   if (typeof generateQuietPrompt !== 'function' && typeof generateRawFn !== 'function') {
     console.warn(`${LOG_PREFIX} Neither generateQuietPrompt nor generateRaw are available in the current context.`);
-    return null;
-  }
-
-  const structuredPrompt = stringifyPrompt(buildStructuredPrompt(prompt, snapshot));
-  const jsonSchema = getStructuredOutputSchema();
-
-  console.debug(`${LOG_PREFIX} Structured request payload`, {
-    promptType: typeof structuredPrompt,
-    prompt: structuredPrompt,
-  });
-
-  let rawResult = null;
-  try {
-    if (typeof generateRawFn === 'function') {
-      rawResult = await generateRawFn({
-        prompt: structuredPrompt,
-        jsonSchema,
-      });
-    } else {
-      rawResult = await generateQuietPrompt({
-        quietPrompt: structuredPrompt,
-        jsonSchema,
-      });
-    }
-  } catch (error) {
-    console.error(`${LOG_PREFIX} Structured output request failed.`, error);
-    return null;
-  }
-
-  console.debug(`${LOG_PREFIX} Structured output raw result`, rawResult);
-  const structured = parseStructuredOutput(rawResult);
-  if (!structured?.scene && !structured?.character && !structured?.user) {
-    console.warn(`${LOG_PREFIX} Structured output request returned no data. Using fallback.`, rawResult);
     return buildFallbackOutputs(prompt, snapshot);
   }
 
-  return structured;
+  const transcriptBlock = buildTranscriptBlock(snapshot);
+  const persona = normalizeText(snapshot?.persona?.description) ?? null;
+  const characterDescription = normalizeText(snapshot?.characterDescription) ?? 'No character description provided.';
+  const userDescription =
+    normalizeText(snapshot?.userDescription) ??
+    normalizeText(snapshot?.persona?.description) ??
+    'No user description provided.';
+  const basePrompt = normalizeText(prompt) ?? defaultSettings.prompt;
+
+  const sectionPrompts = {
+    scene: [
+      basePrompt ? `Overall directive: ${basePrompt}` : null,
+      persona ? `Active user persona:\n${persona}` : null,
+      `Summarize the current scene in 2-3 sentences. Focus on setting, atmosphere, and ongoing actions.`,
+      `Recent dialogue excerpt:\n${transcriptBlock}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    character: [
+      `Character background:\n${characterDescription}`,
+      `User persona reference:\n${userDescription}`,
+      `Recent dialogue excerpt:\n${transcriptBlock}`,
+      `Describe the main non-user character(s) in the current scene. Mention appearance, attire, expression, pose, and notable actions in one concise paragraph.`,
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    user: [
+      `User persona information:\n${userDescription}`,
+      persona ? `Additional persona details:\n${persona}` : null,
+      `Recent dialogue excerpt:\n${transcriptBlock}`,
+      `Describe the user persona as they would appear within the scene. Include appearance, clothing, mood, and any props in one concise paragraph.`,
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+  };
+
+  const results = {};
+
+  for (const [section, sectionPrompt] of Object.entries(sectionPrompts)) {
+    try {
+      const generated = await runSimpleGeneration(sectionPrompt, generateRawFn, generateQuietPrompt);
+      results[section] = normalizeText(generated) ?? '';
+    } catch (error) {
+      console.warn(`${LOG_PREFIX} Failed to generate ${section} description. Falling back.`, error);
+      results[section] = '';
+    }
+  }
+
+  return {
+    scene: results.scene || buildFallbackScene(basePrompt, transcriptBlock),
+    character: results.character || characterDescription,
+    user: results.user || userDescription,
+  };
 }
 
 function stringifyPrompt(value) {
@@ -222,30 +242,39 @@ function stringifyPrompt(value) {
   }
 }
 
-function buildStructuredPrompt(prompt, snapshot) {
+async function runSimpleGeneration(prompt, generateRawFn, generateQuietPrompt) {
+  if (!prompt) return '';
+  if (typeof generateRawFn === 'function') {
+    return generateRawFn({ prompt });
+  }
+  if (typeof generateQuietPrompt === 'function') {
+    return generateQuietPrompt({ quietPrompt: prompt });
+  }
+  return '';
+}
+
+function buildFallbackOutputs(prompt, snapshot) {
   const basePrompt = normalizeText(prompt) ?? defaultSettings.prompt;
-  const character = normalizeText(snapshot?.characterDescription) ?? 'No character description provided.';
-  const user = normalizeText(snapshot?.userDescription) ?? 'No user description provided.';
-  const persona = normalizeText(snapshot?.persona?.description) ?? null;
-
   const transcriptBlock = buildTranscriptBlock(snapshot);
-  const personaLine = persona ? `Active Persona Description:\n${persona}\n` : '';
+  const character = normalizeText(snapshot?.characterDescription) ?? 'No character description provided.';
+  const userDescription =
+    normalizeText(snapshot?.userDescription) ??
+    normalizeText(snapshot?.persona?.description) ??
+    'No user description provided.';
 
-  return [
-    'You are an assistant that prepares structured prompts for an image generator.',
-    'Write vivid but concise descriptions for each requested field. Avoid repeating identical text across fields; make sure each focuses on its intended subject.',
-    `Overall directive: ${basePrompt}`,
-    personaLine.trim(),
-    `Character Description:\n${character}`,
-    `User Description:\n${user}`,
-    `Recent Dialogue (latest last):\n${transcriptBlock}`,
-    'Return only JSON that matches the provided schema.',
-    'scene: Summarize the setting, atmosphere, and major actions currently happening.',
-    'character: Describe the main non-user character(s) with poses, expressions, outfit, and key traits.',
-    'user: Describe the user persona (appearance, clothing, mood, props) for the scene.',
-  ]
-    .filter(Boolean)
-    .join('\n\n');
+  return {
+    scene: buildFallbackScene(basePrompt, transcriptBlock),
+    character: character || 'Character details unavailable.',
+    user: userDescription || 'User details unavailable.',
+  };
+}
+
+function buildFallbackScene(basePrompt, transcriptBlock) {
+  const sceneParts = [
+    basePrompt ? `Directive: ${basePrompt}` : null,
+    transcriptBlock ? `Recent Dialogue:\n${transcriptBlock}` : null,
+  ].filter(Boolean);
+  return sceneParts.join('\n\n') || basePrompt || 'Scene details unavailable.';
 }
 
 function buildTranscriptBlock(snapshot) {
@@ -258,71 +287,6 @@ function buildTranscriptBlock(snapshot) {
     .join('\n');
 
   return transcript.length ? transcript : '[No recent messages provided]';
-}
-
-function getStructuredOutputSchema() {
-  return {
-    name: 'AdvancedImagePrompt',
-    description: 'Scene, character, and user prompts for image generation.',
-    strict: true,
-    value: {
-      $schema: 'http://json-schema.org/draft-04/schema#',
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        scene: {
-          type: 'string',
-          description: 'Setting, activity, and mood of the full scene.',
-        },
-        character: {
-          type: 'string',
-          description: 'Focus on the non-user characters.',
-        },
-        user: {
-          type: 'string',
-          description: 'Focus on the active user persona.',
-        },
-      },
-      required: ['scene', 'character', 'user'],
-    },
-  };
-}
-
-function parseStructuredOutput(rawResult) {
-  if (!rawResult) return null;
-  if (typeof rawResult === 'object') {
-    return rawResult;
-  }
-  if (typeof rawResult === 'string') {
-    try {
-      return JSON.parse(rawResult);
-    } catch (error) {
-      console.error(`${LOG_PREFIX} Unable to parse structured output JSON.`, error, rawResult);
-      return null;
-    }
-  }
-  return null;
-}
-
-function buildFallbackOutputs(prompt, snapshot) {
-  const basePrompt = normalizeText(prompt) ?? defaultSettings.prompt;
-  const transcriptBlock = buildTranscriptBlock(snapshot);
-  const character = normalizeText(snapshot?.characterDescription) ?? 'No character description provided.';
-  const userDescription =
-    normalizeText(snapshot?.userDescription) ??
-    normalizeText(snapshot?.persona?.description) ??
-    'No user description provided.';
-
-  const sceneParts = [
-    basePrompt ? `Directive: ${basePrompt}` : null,
-    transcriptBlock ? `Recent Dialogue:\n${transcriptBlock}` : null,
-  ].filter(Boolean);
-
-  return {
-    scene: sceneParts.join('\n\n') || basePrompt || 'Scene details unavailable.',
-    character: character || 'Character details unavailable.',
-    user: userDescription || 'User details unavailable.',
-  };
 }
 
 function applyStructuredOutputs(root, structured) {
