@@ -77,16 +77,8 @@ function bindField(root, selector, key) {
 function bindButtons(root) {
   $(root)
     .find('#ani-generate-desc')
-    .on('click', () => {
-      const prompt = extension_settings[SETTINGS_KEY].prompt || '';
-      const snapshot = captureContextSnapshot();
-      console.group(`${LOG_PREFIX} Generate Description`);
-      console.log('Prompt field:', prompt); // User-defined prompt
-      console.log('Recent messages:', snapshot.messages); // Last 5 messages
-      console.log('User description:', snapshot.userDescription); // User persona description
-      console.log('Character description:', snapshot.characterDescription); // Active character description
-      console.log('Persona context:', snapshot.persona); // Persona details, beyond simple decription
-      console.groupEnd();
+    .on('click', async () => {
+      await handleGenerateDescriptionClick(root);
     });
 
   $(root)
@@ -144,6 +136,158 @@ jQuery(async () => {
   ensureSettings();
   await mountUI();
 });
+
+async function handleGenerateDescriptionClick(root) {
+  const button = $(root).find('#ani-generate-desc');
+  if (!button.length || button.data('busy') === true) return;
+
+  button.data('busy', true);
+  const originalLabel = button.text();
+  button.prop('disabled', true).text('Generating...');
+
+  try {
+    const snapshot = captureContextSnapshot();
+    const promptText = normalizeText(extension_settings[SETTINGS_KEY].prompt) ?? defaultSettings.prompt;
+    const structured = await generateStructuredOutputs(promptText, snapshot);
+
+    if (structured) {
+      applyStructuredOutputs(root, structured);
+      console.log(`${LOG_PREFIX} Structured output`, structured);
+    } else {
+      console.warn(`${LOG_PREFIX} Structured output request returned no data.`);
+    }
+  } catch (error) {
+    console.error(`${LOG_PREFIX} Failed to generate structured output.`, error);
+  } finally {
+    button.prop('disabled', false).text(originalLabel);
+    button.removeData('busy');
+  }
+}
+
+async function generateStructuredOutputs(prompt, snapshot) {
+  const context = getSTContext();
+  const generateQuietPrompt = context?.generateQuietPrompt;
+  if (typeof generateQuietPrompt !== 'function') {
+    console.warn(`${LOG_PREFIX} generateQuietPrompt is not available in the current context.`);
+    return null;
+  }
+
+  const quietPrompt = buildStructuredPrompt(prompt, snapshot);
+  const jsonSchema = getStructuredOutputSchema();
+
+  let rawResult = null;
+  try {
+    rawResult = await generateQuietPrompt({
+      quietPrompt,
+      jsonSchema,
+    });
+  } catch (error) {
+    console.error(`${LOG_PREFIX} Structured output request failed.`, error);
+    return null;
+  }
+
+  const structured = parseStructuredOutput(rawResult);
+  if (!structured?.scene && !structured?.character && !structured?.user) {
+    return null;
+  }
+
+  return structured;
+}
+
+function buildStructuredPrompt(prompt, snapshot) {
+  const basePrompt = normalizeText(prompt) ?? defaultSettings.prompt;
+  const character = normalizeText(snapshot?.characterDescription) ?? 'No character description provided.';
+  const user = normalizeText(snapshot?.userDescription) ?? 'No user description provided.';
+  const persona = normalizeText(snapshot?.persona?.description) ?? null;
+
+  const transcript = (snapshot?.messages ?? [])
+    .map((message, idx) => {
+      const speaker = message?.speaker || `Speaker ${idx + 1}`;
+      const text = normalizeText(message?.text) ?? '[No text provided]';
+      return `${speaker}: ${text}`;
+    })
+    .join('\n');
+
+  const personaLine = persona ? `Active Persona Description:\n${persona}\n` : '';
+  const transcriptBlock = transcript.length ? transcript : '[No recent messages provided]';
+
+  return [
+    'You are an assistant that prepares structured prompts for an image generator.',
+    'Write vivid but concise descriptions for each requested field. Avoid repeating identical text across fields; make sure each focuses on its intended subject.',
+    `Overall directive: ${basePrompt}`,
+    personaLine.trim(),
+    `Character Description:\n${character}`,
+    `User Description:\n${user}`,
+    `Recent Dialogue (latest last):\n${transcriptBlock}`,
+    'Return only JSON that matches the provided schema.',
+    'scene: Summarize the setting, atmosphere, and major actions currently happening.',
+    'character: Describe the main non-user character(s) with poses, expressions, outfit, and key traits.',
+    'user: Describe the user persona (appearance, clothing, mood, props) for the scene.',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function getStructuredOutputSchema() {
+  return {
+    name: 'AdvancedImagePrompt',
+    description: 'Scene, character, and user prompts for image generation.',
+    strict: true,
+    value: {
+      $schema: 'http://json-schema.org/draft-04/schema#',
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        scene: {
+          type: 'string',
+          description: 'Setting, activity, and mood of the full scene.',
+        },
+        character: {
+          type: 'string',
+          description: 'Focus on the non-user characters.',
+        },
+        user: {
+          type: 'string',
+          description: 'Focus on the active user persona.',
+        },
+      },
+      required: ['scene', 'character', 'user'],
+    },
+  };
+}
+
+function parseStructuredOutput(rawResult) {
+  if (!rawResult) return null;
+  if (typeof rawResult === 'object') {
+    return rawResult;
+  }
+  if (typeof rawResult === 'string') {
+    try {
+      return JSON.parse(rawResult);
+    } catch (error) {
+      console.error(`${LOG_PREFIX} Unable to parse structured output JSON.`, error, rawResult);
+      return null;
+    }
+  }
+  return null;
+}
+
+function applyStructuredOutputs(root, structured) {
+  if (!structured) return;
+  const scene = normalizeText(structured.scene) ?? '';
+  const character = normalizeText(structured.character) ?? '';
+  const user = normalizeText(structured.user) ?? '';
+
+  extension_settings[SETTINGS_KEY].scene = scene;
+  extension_settings[SETTINGS_KEY].character = character;
+  extension_settings[SETTINGS_KEY].user = user;
+
+  $(root).find('#ani-scene').val(scene);
+  $(root).find('#ani-char').val(character);
+  $(root).find('#ani-user').val(user);
+
+  saveSettingsDebounced();
+}
 
 function captureContextSnapshot() {
   const context = getSTContext();
