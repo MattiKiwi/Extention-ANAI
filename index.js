@@ -167,27 +167,40 @@ async function handleGenerateDescriptionClick(root) {
 async function generateStructuredOutputs(prompt, snapshot) {
   const context = getSTContext();
   const generateQuietPrompt = context?.generateQuietPrompt;
-  if (typeof generateQuietPrompt !== 'function') {
-    console.warn(`${LOG_PREFIX} generateQuietPrompt is not available in the current context.`);
+  const generateRaw = context?.generateRaw;
+  if (typeof generateQuietPrompt !== 'function' && typeof generateRaw !== 'function') {
+    console.warn(`${LOG_PREFIX} Neither generateQuietPrompt nor generateRaw are available in the current context.`);
     return null;
   }
 
-  const quietPromptRaw = buildStructuredPrompt(prompt, snapshot);
-  const quietPrompt = String(
-    typeof quietPromptRaw === 'string'
-      ? quietPromptRaw
-      : quietPromptRaw != null
-        ? JSON.stringify(quietPromptRaw, null, 2)
+  const structuredPromptRaw = buildStructuredPrompt(prompt, snapshot);
+  const structuredPrompt = String(
+    typeof structuredPromptRaw === 'string'
+      ? structuredPromptRaw
+      : structuredPromptRaw != null
+        ? JSON.stringify(structuredPromptRaw, null, 2)
         : '',
   );
   const jsonSchema = getStructuredOutputSchema();
 
+  console.debug(`${LOG_PREFIX} Structured request payload`, {
+    promptType: typeof structuredPrompt,
+    prompt: structuredPrompt,
+  });
+
   let rawResult = null;
   try {
-    rawResult = await generateQuietPrompt({
-      quietPrompt,
-      jsonSchema,
-    });
+    if (typeof generateRaw === 'function') {
+      rawResult = await generateRaw({
+        prompt: structuredPrompt,
+        jsonSchema,
+      });
+    } else {
+      rawResult = await generateQuietPrompt({
+        quietPrompt: structuredPrompt,
+        jsonSchema,
+      });
+    }
   } catch (error) {
     console.error(`${LOG_PREFIX} Structured output request failed.`, error);
     return null;
