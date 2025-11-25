@@ -81,7 +81,7 @@ function bindButtons(root) {
       console.log('Prompt field:', prompt);
       console.log('Recent messages:', snapshot.messages);
       console.log('User description:', snapshot.userDescription);
-      console.log('Character description:', snapshot.characterDescription);
+      console.log('Character description:', snapshot.characterDescription.description);
       console.log('Persona context:', snapshot.persona);
       console.groupEnd();
     });
