@@ -134,8 +134,31 @@ async function mountUI() {
 
 jQuery(async () => {
   ensureSettings();
+  ensureSafeSubstituteParams();
   await mountUI();
 });
+
+function ensureSafeSubstituteParams() {
+  const globalFn = globalThis.substituteParams;
+  if (typeof globalFn !== 'function' || globalFn.__ani_safe === true) {
+    return;
+  }
+
+  const wrapped = function wrappedSubstituteParams(content, ...rest) {
+    if (content == null) {
+      content = '';
+    } else if (typeof content !== 'string') {
+      try {
+        content = String(content);
+      } catch {
+        content = '';
+      }
+    }
+    return globalFn.call(this, content, ...rest);
+  };
+  wrapped.__ani_safe = true;
+  globalThis.substituteParams = wrapped;
+}
 
 async function handleGenerateDescriptionClick(root) {
   const button = $(root).find('#ani-generate-desc');
