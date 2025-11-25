@@ -223,17 +223,10 @@ async function generateStructuredOutputs(prompt, snapshot) {
 
   let rawResult = null;
   try {
-    if (typeof generateRawFn === 'function') {
-      rawResult = await generateRawFn({
-        prompt: structuredPrompt,
-        jsonSchema,
-      });
-    } else {
-      rawResult = await generateQuietPrompt({
-        quietPrompt: structuredPrompt,
-        jsonSchema,
-      });
-    }
+    rawResult = await generateQuietPrompt({
+      quietPrompt: structuredPrompt,
+      jsonSchema,
+    });
   } catch (error) {
     console.error(`${LOG_PREFIX} Structured output request failed.`, error);
     return null;
