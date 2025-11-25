@@ -185,26 +185,32 @@ async function generateStructuredOutputs(prompt, snapshot) {
 
   const sectionPrompts = {
     scene: [
+      'You generate lowercase comma-separated tags for image prompting.',
       basePrompt ? `Overall directive: ${basePrompt}` : null,
       persona ? `Active user persona:\n${persona}` : null,
-      `Summarize the current scene in 2-3 sentences. Focus on setting, atmosphere, and ongoing actions.`,
+      `Return descriptive tags that capture the entire scene: environment, weather, lighting, mood, camera angle, number of characters, and major actions.`,
+      `Use the format "tag1, tag2, tag3". Avoid sentences.`,
       `Recent dialogue excerpt:\n${transcriptBlock}`,
     ]
       .filter(Boolean)
       .join('\n\n'),
     character: [
+      'You generate lowercase comma-separated tags for image prompting.',
       `Character background:\n${characterDescription}`,
-      `User persona reference:\n${userDescription}`,
+      `User persona reference (for context only):\n${userDescription}`,
+      `Return tags that describe only the non-user character(s): count, gender, appearance, clothing, expression, pose, and props.`,
+      `Use the format "tag1, tag2, tag3" and do not mention the user persona.`,
       `Recent dialogue excerpt:\n${transcriptBlock}`,
-      `Describe the main non-user character(s) in the current scene. Mention appearance, attire, expression, pose, and notable actions in one concise paragraph.`,
     ]
       .filter(Boolean)
       .join('\n\n'),
     user: [
+      'You generate lowercase comma-separated tags for image prompting.',
       `User persona information:\n${userDescription}`,
       persona ? `Additional persona details:\n${persona}` : null,
+      `Return tags that describe only the user persona: appearance, clothing, mood, pose, props, and camera focus.`,
+      `Use the format "tag1, tag2, tag3" and do not describe other characters.`,
       `Recent dialogue excerpt:\n${transcriptBlock}`,
-      `Describe the user persona as they would appear within the scene. Include appearance, clothing, mood, and any props in one concise paragraph.`,
     ]
       .filter(Boolean)
       .join('\n\n'),
@@ -215,7 +221,7 @@ async function generateStructuredOutputs(prompt, snapshot) {
   for (const [section, sectionPrompt] of Object.entries(sectionPrompts)) {
     try {
       const generated = await runSimpleGeneration(sectionPrompt, generateRawFn, generateQuietPrompt);
-      outputs[section] = normalizeText(generated) ?? '';
+      outputs[section] = formatTagList(normalizeText(generated));
     } catch (error) {
       console.warn(`${LOG_PREFIX} Failed to generate ${section} description. Falling back.`, error);
       outputs[section] = '';
@@ -240,6 +246,18 @@ function stringifyPrompt(value) {
   } catch {
     return '';
   }
+}
+
+function formatTagList(...parts) {
+  const combined = parts
+    .map((part) => stringifyPrompt(part).replace(/\r/g, ''))
+    .filter((part) => part && part.trim().length)
+    .join(', ');
+  return combined
+    .split(/[,.;\n]+/)
+    .map((segment) => segment.trim().replace(/\s+/g, ' '))
+    .filter(Boolean)
+    .join(', ');
 }
 
 async function runSimpleGeneration(prompt, generateRawFn, generateQuietPrompt) {
@@ -268,17 +286,17 @@ function buildFallbackOutputs(prompt, snapshot) {
 
   return {
     scene: buildFallbackScene(basePrompt, transcriptBlock),
-    character: character || 'Character details unavailable.',
-    user: userDescription || 'User details unavailable.',
+    character: formatTagList(character || 'character'),
+    user: formatTagList(userDescription || 'user'),
   };
 }
 
 function buildFallbackScene(basePrompt, transcriptBlock) {
   const sceneParts = [
-    basePrompt ? `Directive: ${basePrompt}` : null,
-    transcriptBlock ? `Recent Dialogue:\n${transcriptBlock}` : null,
+    basePrompt ? `directive ${basePrompt}` : null,
+    transcriptBlock ? `dialogue ${transcriptBlock}` : null,
   ].filter(Boolean);
-  return sceneParts.join('\n\n') || basePrompt || 'Scene details unavailable.';
+  return formatTagList(sceneParts.join(', ') || basePrompt || 'scene');
 }
 
 function buildTranscriptBlock(snapshot) {
