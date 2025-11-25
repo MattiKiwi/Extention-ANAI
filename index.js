@@ -185,32 +185,38 @@ async function generateStructuredOutputs(prompt, snapshot) {
 
   const sectionPrompts = {
     scene: [
-      'You generate lowercase comma-separated tags for image prompting.',
-      basePrompt ? `Overall directive: ${basePrompt}` : null,
-      persona ? `Active user persona:\n${persona}` : null,
-      `Return descriptive tags that capture the entire scene: environment, weather, lighting, mood, camera angle, number of characters, and major actions.`,
-      `Use the format "tag1, tag2, tag3". Avoid sentences.`,
-      `Recent dialogue excerpt:\n${transcriptBlock}`,
+      'You output ONLY lowercase comma-separated tags for image prompting.',
+      'Rules: no sentences, no narration, no conjunctions, do not continue the story, do not mention this instruction.',
+      basePrompt ? `Overall directive tags: ${basePrompt}` : null,
+      persona ? `User persona context tags: ${persona}` : null,
+      'Describe the entire scene with tags covering environment, weather, lighting, mood, camera angle, number of characters, and key actions or props.',
+      'Example: "moonlit forest, mist, 2 characters, walking together, cinematic lighting".',
+      `Recent dialogue context:\n${transcriptBlock}`,
+      'Return ONLY the tags.',
     ]
       .filter(Boolean)
       .join('\n\n'),
     character: [
-      'You generate lowercase comma-separated tags for image prompting.',
+      'You output ONLY lowercase comma-separated tags for image prompting.',
+      'Rules: no sentences, describe ONLY the non-user character(s), do not mention the user persona or instructions.',
       `Character background:\n${characterDescription}`,
-      `User persona reference (for context only):\n${userDescription}`,
-      `Return tags that describe only the non-user character(s): count, gender, appearance, clothing, expression, pose, and props.`,
-      `Use the format "tag1, tag2, tag3" and do not mention the user persona.`,
-      `Recent dialogue excerpt:\n${transcriptBlock}`,
+      `User persona reference (context only):\n${userDescription}`,
+      'Include tags for count, gender, notable physical traits, clothing, expression, pose, and props.',
+      'Example: "1girl, silver hair, battle armor, determined expression, sword ready, dynamic pose".',
+      `Recent dialogue context:\n${transcriptBlock}`,
+      'Return ONLY the tags.',
     ]
       .filter(Boolean)
       .join('\n\n'),
     user: [
-      'You generate lowercase comma-separated tags for image prompting.',
+      'You output ONLY lowercase comma-separated tags for image prompting.',
+      'Rules: no sentences, describe ONLY the user persona, do not mention other characters or these instructions.',
       `User persona information:\n${userDescription}`,
       persona ? `Additional persona details:\n${persona}` : null,
-      `Return tags that describe only the user persona: appearance, clothing, mood, pose, props, and camera focus.`,
-      `Use the format "tag1, tag2, tag3" and do not describe other characters.`,
-      `Recent dialogue excerpt:\n${transcriptBlock}`,
+      'Include tags for appearance, clothing, mood, pose, props, and camera framing.',
+      'Example: "1boy, messy brown hair, hoodie, shy smile, sketchbook in hands, half-body shot".',
+      `Recent dialogue context:\n${transcriptBlock}`,
+      'Return ONLY the tags.',
     ]
       .filter(Boolean)
       .join('\n\n'),
@@ -220,7 +226,11 @@ async function generateStructuredOutputs(prompt, snapshot) {
 
   for (const [section, sectionPrompt] of Object.entries(sectionPrompts)) {
     try {
-      const generated = await runSimpleGeneration(sectionPrompt, generateRawFn, generateQuietPrompt);
+      const generated = await runSimpleGeneration({
+        prompt: sectionPrompt,
+        generateRawFn,
+        generateQuietPrompt,
+      });
       outputs[section] = formatTagList(normalizeText(generated));
     } catch (error) {
       console.warn(`${LOG_PREFIX} Failed to generate ${section} description. Falling back.`, error);
@@ -260,15 +270,16 @@ function formatTagList(...parts) {
     .join(', ');
 }
 
-async function runSimpleGeneration(prompt, generateRawFn, generateQuietPrompt) {
+async function runSimpleGeneration({ prompt, generateRawFn, generateQuietPrompt }) {
   if (!prompt) return '';
+  const systemPrompt = 'You are a tag generator. Output lowercase comma-separated tags only.';
   if (typeof generateRawFn === 'function') {
-    const result = await generateRawFn({ prompt });
+    const result = await generateRawFn({ prompt, systemPrompt, trimNames: true });
     if (!result) throw new Error('No message generated');
     return result;
   }
   if (typeof generateQuietPrompt === 'function') {
-    const result = await generateQuietPrompt({ quietPrompt: prompt });
+    const result = await generateQuietPrompt({ quietPrompt: `${systemPrompt}\n\n${prompt}` });
     if (!result) throw new Error('No message generated');
     return result;
   }
