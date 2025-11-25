@@ -139,7 +139,7 @@
     document.getElementById(ROOT_ID)?.remove();
   }
 
-  function register() {
+  function register(attempt = 0) {
     if (typeof registerExtension === 'function') {
       registerExtension({
         name: EXTENSION_ID,
@@ -148,12 +148,18 @@
         init,
         unload,
       });
-    } else {
-      console.warn(
-        `[${EXTENSION_NAME}] registerExtension() is unavailable; mounting immediately.`,
-      );
-      init();
+      return;
     }
+
+    if (attempt > 20) {
+      console.error(
+        `[${EXTENSION_NAME}] Could not find registerExtension(); giving up.`,
+      );
+      return;
+    }
+
+    // registerExtension might not be defined yet; wait for ST to finish booting.
+    setTimeout(() => register(attempt + 1), 250);
   }
 
   register();

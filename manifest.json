@@ -1,10 +1,10 @@
 {
   "display_name": "Advanced NAI Image",
-  "loading_order": 10,
-  "author": "Your Name",
+  "loading_order": 9,
+  "author": "Kiwi",
   "version": "0.1.0",
   "js": "index.js",
   "css": "style.css",
-  "homePage": "https://github.com/your/repo",
+  "homePage": "https://github.com/MattiKiwi/advanced-image-gen",
   "auto_update": true
 }
