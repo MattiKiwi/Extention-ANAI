@@ -134,40 +134,8 @@ async function mountUI() {
 
 jQuery(async () => {
   ensureSettings();
-  ensureSafeMacroWrappers();
   await mountUI();
 });
-
-function ensureSafeMacroWrappers() {
-  wrapMacroInputAsString('substituteParams');
-  wrapMacroInputAsString('evaluateMacros');
-}
-
-function wrapMacroInputAsString(functionName) {
-  const fn = globalThis?.[functionName];
-  if (typeof fn !== 'function' || fn.__ani_safe === true) {
-    return;
-  }
-
-  const wrapped = function safeMacroWrapper(content, ...rest) {
-    let safeContent;
-    if (content == null) {
-      safeContent = '';
-    } else if (typeof content === 'string') {
-      safeContent = content;
-    } else {
-      try {
-        safeContent = String(content);
-      } catch {
-        safeContent = '';
-      }
-    }
-    return fn.call(this, safeContent, ...rest);
-  };
-
-  wrapped.__ani_safe = true;
-  globalThis[functionName] = wrapped;
-}
 
 async function handleGenerateDescriptionClick(root) {
   const button = $(root).find('#ani-generate-desc');
@@ -197,7 +165,6 @@ async function handleGenerateDescriptionClick(root) {
 }
 
 async function generateStructuredOutputs(prompt, snapshot) {
-  ensureSafeMacroWrappers();
   const context = getSTContext();
   const generateQuietPrompt = context?.generateQuietPrompt;
   const generateRawFn = context?.generateRaw ?? coreGenerateRaw;
@@ -232,8 +199,10 @@ async function generateStructuredOutputs(prompt, snapshot) {
     return null;
   }
 
+  console.debug(`${LOG_PREFIX} Structured output raw result`, rawResult);
   const structured = parseStructuredOutput(rawResult);
   if (!structured?.scene && !structured?.character && !structured?.user) {
+    console.warn(`${LOG_PREFIX} Structured output request returned no data.`, rawResult);
     return null;
   }
 
