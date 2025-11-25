@@ -1,1 +1,160 @@
-(()=>{"use strict";const e="ani-ext-root",n=["#extensions_settings2","#extensions_settings"],t=`\n<div id="${e}" class="ani-ext">\n  <div class="inline-drawer">\n    <div class="inline-drawer-toggle inline-drawer-header" title="Advanced Novel AI Image UI">\n      <b>Advanced NAI Image (UI)</b>\n      <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>\n    </div>\n    <div class="inline-drawer-content">\n      <div class="ani-form">\n\n        \x3c!-- 1) Prompt used to generate the scene description --\x3e\n        <div class="ani-block">\n          <label class="ani-label" for="ani-prompt">Prompt for scene description</label>\n          <textarea id="ani-prompt" class="text_pole textarea_compact" rows="3"\n            placeholder="e.g., Summarize chapter into a vivid scene setup…"></textarea>\n        </div>\n\n        \x3c!-- 2) Scene description --\x3e\n        <div class="ani-block">\n          <label class="ani-label" for="ani-scene">Scene description</label>\n          <textarea id="ani-scene" class="text_pole textarea_compact" rows="4"\n            placeholder="A windswept cliff at dusk…"></textarea>\n        </div>\n\n        \x3c!-- 3–4) Character descriptions --\x3e\n        <div class="ani-grid">\n          <div class="ani-block">\n            <label class="ani-label" for="ani-char">Character description (character)</label>\n            <textarea id="ani-char" class="text_pole textarea_compact" rows="3"\n              placeholder="The rogue: lean, scar over left brow…"></textarea>\n          </div>\n          <div class="ani-block">\n            <label class="ani-label" for="ani-user">Character description (user)</label>\n            <textarea id="ani-user" class="text_pole textarea_compact" rows="3"\n              placeholder="The user avatar / self-insert…"></textarea>\n          </div>\n        </div>\n\n        \x3c!-- Actions --\x3e\n        <div class="ani-actions">\n          <button id="ani-generate-desc" class="menu_button" type="button">Generate Description</button>\n          <button id="ani-generate-image" class="menu_button" type="button">Generate Image</button>\n        </div>\n\n      </div>\n    </div>\n  </div>\n</div>\n`;function a(){const a=function(){for(const e of n){const n=document.querySelector(e);if(n)return n}return null}();if(!a)return;if(a.querySelector(`#${e}`))return;const i=document.createElement("div");i.innerHTML=t.trim();const c=i.firstElementChild;c&&(a.appendChild(c),function(){const e=document.getElementById("ani-prompt"),n=document.getElementById("ani-scene"),t=document.getElementById("ani-char"),a=document.getElementById("ani-user"),i=document.getElementById("ani-generate-desc"),c=document.getElementById("ani-generate-image");i&&i.addEventListener("click",(()=>{var n;console.log("[Advanced NAI Image] Generate Description — prompt:",null!==(n=null==e?void 0:e.value)&&void 0!==n?n:"")}));c&&c.addEventListener("click",(()=>{var e,i,c;const r={scene:null!==(e=null==n?void 0:n.value)&&void 0!==e?e:"",character:null!==(i=null==t?void 0:t.value)&&void 0!==i?i:"",user:null!==(c=null==a?void 0:a.value)&&void 0!==c?c:""};console.log("[Advanced NAI Image] Generate Image — inputs:",r)}))}())}const i=new MutationObserver((()=>a()));document.body?(i.observe(document.body,{childList:!0,subtree:!0}),a()):document.addEventListener("DOMContentLoaded",(()=>{i.observe(document.body,{childList:!0,subtree:!0}),a()}),{once:!0})})();
+(() => {
+  const EXTENSION_ID = 'advanced-nai-image';
+  const EXTENSION_NAME = 'Advanced NAI Image';
+  const ROOT_ID = 'ani-ext-root';
+  const SETTINGS_PANES = ['#extensions_settings2', '#extensions_settings'];
+
+  let observer;
+
+  const layout = `
+<div id="${ROOT_ID}" class="ani-ext">
+  <div class="inline-drawer">
+    <div class="inline-drawer-toggle inline-drawer-header" title="Advanced Novel AI Image UI">
+      <b>Advanced NAI Image (UI)</b>
+      <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+    </div>
+    <div class="inline-drawer-content">
+      <div class="ani-form">
+
+        <!-- 1) Prompt used to generate the scene description -->
+        <div class="ani-block">
+          <label class="ani-label" for="ani-prompt">Prompt for scene description</label>
+          <textarea id="ani-prompt" class="text_pole textarea_compact" rows="3"
+            placeholder="e.g., Summarize chapter into a vivid scene setup…"></textarea>
+        </div>
+
+        <!-- 2) Scene description -->
+        <div class="ani-block">
+          <label class="ani-label" for="ani-scene">Scene description</label>
+          <textarea id="ani-scene" class="text_pole textarea_compact" rows="4"
+            placeholder="A windswept cliff at dusk…"></textarea>
+        </div>
+
+        <!-- 3–4) Character descriptions -->
+        <div class="ani-grid">
+          <div class="ani-block">
+            <label class="ani-label" for="ani-char">Character description (character)</label>
+            <textarea id="ani-char" class="text_pole textarea_compact" rows="3"
+              placeholder="The rogue: lean, scar over left brow…"></textarea>
+          </div>
+          <div class="ani-block">
+            <label class="ani-label" for="ani-user">Character description (user)</label>
+            <textarea id="ani-user" class="text_pole textarea_compact" rows="3"
+              placeholder="The user avatar / self-insert…"></textarea>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="ani-actions">
+          <button id="ani-generate-desc" class="menu_button" type="button">Generate Description</button>
+          <button id="ani-generate-image" class="menu_button" type="button">Generate Image</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+`.trim();
+
+  function getSettingsPane() {
+    for (const selector of SETTINGS_PANES) {
+      const pane = document.querySelector(selector);
+      if (pane) return pane;
+    }
+    return null;
+  }
+
+  function wireEvents(host) {
+    const promptInput = host.querySelector('#ani-prompt');
+    const sceneInput = host.querySelector('#ani-scene');
+    const characterInput = host.querySelector('#ani-char');
+    const userInput = host.querySelector('#ani-user');
+    const descriptionButton = host.querySelector('#ani-generate-desc');
+    const imageButton = host.querySelector('#ani-generate-image');
+
+    descriptionButton?.addEventListener('click', () => {
+      const prompt = promptInput?.value || '';
+      console.log(`[${EXTENSION_NAME}] Generate Description — prompt:`, prompt);
+    });
+
+    imageButton?.addEventListener('click', () => {
+      const payload = {
+        scene: sceneInput?.value || '',
+        character: characterInput?.value || '',
+        user: userInput?.value || '',
+      };
+      console.log(`[${EXTENSION_NAME}] Generate Image — inputs:`, payload);
+    });
+  }
+
+  function mount() {
+    const settingsPane = getSettingsPane();
+    if (!settingsPane) return false;
+    if (settingsPane.querySelector(`#${ROOT_ID}`)) return true;
+
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = layout;
+    const root = wrapper.firstElementChild;
+    if (!root) return false;
+
+    settingsPane.appendChild(root);
+    wireEvents(root);
+
+    return true;
+  }
+
+  function enableObserver() {
+    if (observer || !document.body) return;
+    observer = new MutationObserver(() => {
+      mount();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  async function init() {
+    try {
+      if (document.body) {
+        mount();
+        enableObserver();
+      } else {
+        document.addEventListener(
+          'DOMContentLoaded',
+          () => {
+            mount();
+            enableObserver();
+          },
+          { once: true },
+        );
+      }
+      return true;
+    } catch (error) {
+      console.error(`[${EXTENSION_NAME}] Failed to initialize`, error);
+      return false;
+    }
+  }
+
+  function unload() {
+    observer?.disconnect();
+    observer = undefined;
+    document.getElementById(ROOT_ID)?.remove();
+  }
+
+  function register() {
+    if (typeof registerExtension === 'function') {
+      registerExtension({
+        name: EXTENSION_ID,
+        fullName: EXTENSION_NAME,
+        version: '0.1.0',
+        init,
+        unload,
+      });
+    } else {
+      console.warn(
+        `[${EXTENSION_NAME}] registerExtension() is unavailable; mounting immediately.`,
+      );
+      init();
+    }
+  }
+
+  register();
+})();
