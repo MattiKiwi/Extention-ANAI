@@ -1,6 +1,6 @@
 import { saveSettingsDebounced } from '../../../../script.js';
 import { debounce } from '../../../utils.js';
-import { extension_settings, renderExtensionTemplateAsync } from '../../../extensions.js';
+import { extension_settings, getContext, renderExtensionTemplateAsync } from '../../../extensions.js';
 
 const FALLBACK_EXTENSION_PATH = 'third-party/advanced-image-gen';
 const SETTINGS_KEY = 'advanced_nai_image';
@@ -74,7 +74,13 @@ function bindButtons(root) {
     .find('#ani-generate-desc')
     .on('click', () => {
       const prompt = extension_settings[SETTINGS_KEY].prompt || '';
-      console.log(`${LOG_PREFIX} Generate Description`, { prompt });
+      const contextSnapshot = captureContextSnapshot();
+      console.group(`${LOG_PREFIX} Generate Description`);
+      console.log('Prompt field:', prompt);
+      console.log('Recent messages:', contextSnapshot.messages);
+      console.log('User card:', contextSnapshot.userCard);
+      console.log('Character card:', contextSnapshot.characterCard);
+      console.groupEnd();
     });
 
   $(root)
@@ -89,6 +95,59 @@ function bindButtons(root) {
     });
 }
 
+function captureContextSnapshot() {
+  const context = typeof getContext === 'function' ? getContext() : null;
+
+  const messagesSource = Array.isArray(context?.chat)
+    ? context.chat
+    : Array.isArray(globalThis?.chat)
+    ? globalThis.chat
+    : Array.isArray(context?.messages)
+    ? context.messages
+    : [];
+
+  const messages = messagesSource.slice(-5).map((entry, index) => {
+    if (typeof entry === 'string') {
+      return { index, speaker: 'unknown', text: entry };
+    }
+    const speaker =
+      entry?.name ||
+      (entry?.is_user ? context?.name1 || 'You' : context?.name2 || 'Character') ||
+      'unknown';
+    const text = entry?.mes ?? entry?.text ?? '';
+    return { index, speaker, text };
+  });
+
+  const userCard =
+    context?.user ??
+    context?.userCard ??
+    (globalThis?.characters &&
+      findCharacterById(globalThis.characters, context?.userId));
+  const characterCard =
+    context?.character ??
+    context?.characterCard ??
+    (globalThis?.characters &&
+      findCharacterById(globalThis.characters, context?.characterId));
+
+  return {
+    messages,
+    userCard: userCard ?? null,
+    characterCard: characterCard ?? null,
+  };
+}
+
+function findCharacterById(charactersCollection, id) {
+  if (!id || !charactersCollection) return null;
+  if (Array.isArray(charactersCollection)) {
+    return charactersCollection.find(
+      (character) => character?.avatar === id || character?.id === id,
+    );
+  }
+  if (typeof charactersCollection === 'object') {
+    return charactersCollection[id] ?? null;
+  }
+  return null;
+}
 function removeExistingUI() {
   document.getElementById(ROOT_ID)?.remove();
 }
