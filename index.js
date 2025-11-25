@@ -80,6 +80,9 @@ function bindButtons(root) {
       console.log('Recent messages:', snapshot.messages);
       console.log('User description:', snapshot.userDescription);
       console.log('Character description:', snapshot.characterDescription);
+      if (snapshot.debug) {
+        console.debug(`${LOG_PREFIX} Context diagnostics`, snapshot.debug);
+      }
       console.groupEnd();
     });
 
@@ -146,6 +149,7 @@ function captureContextSnapshot() {
       messages: [],
       userDescription: null,
       characterDescription: null,
+      debug: null,
     };
   }
 
@@ -166,6 +170,7 @@ function captureContextSnapshot() {
     messages,
     userDescription: getUserDescription(context),
     characterDescription: getCharacterDescription(context),
+    debug: buildContextDiagnostics(context),
   };
 }
 
@@ -278,4 +283,49 @@ function normalizeText(value) {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : null;
+}
+
+function buildContextDiagnostics(context) {
+  try {
+    const powerUser = context?.powerUserSettings;
+    const descriptors = powerUser?.persona_descriptions;
+    const descriptorKeys = descriptors && typeof descriptors === 'object' ? Object.keys(descriptors) : [];
+    const characters = context?.characters;
+    const characterSummary = [];
+    if (Array.isArray(characters)) {
+      characters.forEach((character, index) => {
+        if (character) {
+          characterSummary.push({
+            index,
+            name: character.name ?? character.data?.name ?? null,
+            avatar: character.avatar ?? null,
+          });
+        }
+      });
+    } else if (characters && typeof characters === 'object') {
+      Object.keys(characters).forEach((key) => {
+        const character = characters[key];
+        if (character) {
+          characterSummary.push({
+            key,
+            name: character.name ?? character.data?.name ?? null,
+            avatar: character.avatar ?? null,
+          });
+        }
+      });
+    }
+    return {
+      hasPowerUserSettings: Boolean(powerUser),
+      personaDescription: powerUser?.persona_description ?? null,
+      personaDescriptorKeys: descriptorKeys.slice(0, 5),
+      personaDescriptorCount: descriptorKeys.length,
+      defaultPersona: powerUser?.default_persona ?? null,
+      chatPersona: context?.chatMetadata?.persona ?? null,
+      characterId: context?.characterId ?? null,
+      availableCharacterCount: characterSummary.length,
+      sampleCharacters: characterSummary.slice(0, 5),
+    };
+  } catch (error) {
+    return { error: String(error) };
+  }
 }
