@@ -222,6 +222,7 @@ async function generateStructuredOutputs(prompt, snapshot) {
       .join('\n\n'),
   };
 
+  console.debug(`${LOG_PREFIX} Section prompts`, sectionPrompts);
   const outputs = { scene: '', character: '', user: '' };
 
   for (const [section, sectionPrompt] of Object.entries(sectionPrompts)) {
