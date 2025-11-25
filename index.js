@@ -185,7 +185,7 @@ function getSTContext() {
 }
 
 function getUserDescription(context) {
-  const settings = context?.powerUserSettings;
+  const settings = getPowerUserSettings(context);
   if (!settings) return null;
 
   const directDescription = normalizeText(settings.persona_description);
@@ -285,9 +285,27 @@ function normalizeText(value) {
   return trimmed.length ? trimmed : null;
 }
 
+function getPowerUserSettings(context) {
+  if (context?.powerUserSettings) {
+    return context.powerUserSettings;
+  }
+
+  const globalPowerUser =
+    globalThis.power_user ||
+    globalThis.powerUser ||
+    globalThis?.SillyTavern?.power_user ||
+    null;
+
+  if (globalPowerUser) {
+    return globalPowerUser;
+  }
+
+  return context?.extensionSettings?.power_user ?? null;
+}
+
 function buildContextDiagnostics(context) {
   try {
-    const powerUser = context?.powerUserSettings;
+    const powerUser = getPowerUserSettings(context);
     const descriptors = powerUser?.persona_descriptions;
     const descriptorKeys = descriptors && typeof descriptors === 'object' ? Object.keys(descriptors) : [];
     const characters = context?.characters;
