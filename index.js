@@ -134,30 +134,39 @@ async function mountUI() {
 
 jQuery(async () => {
   ensureSettings();
-  ensureSafeSubstituteParams();
+  ensureSafeMacroWrappers();
   await mountUI();
 });
 
-function ensureSafeSubstituteParams() {
-  const globalFn = globalThis.substituteParams;
-  if (typeof globalFn !== 'function' || globalFn.__ani_safe === true) {
+function ensureSafeMacroWrappers() {
+  wrapMacroInputAsString('substituteParams');
+  wrapMacroInputAsString('evaluateMacros');
+}
+
+function wrapMacroInputAsString(functionName) {
+  const fn = globalThis?.[functionName];
+  if (typeof fn !== 'function' || fn.__ani_safe === true) {
     return;
   }
 
-  const wrapped = function wrappedSubstituteParams(content, ...rest) {
+  const wrapped = function safeMacroWrapper(content, ...rest) {
+    let safeContent;
     if (content == null) {
-      content = '';
-    } else if (typeof content !== 'string') {
+      safeContent = '';
+    } else if (typeof content === 'string') {
+      safeContent = content;
+    } else {
       try {
-        content = String(content);
+        safeContent = String(content);
       } catch {
-        content = '';
+        safeContent = '';
       }
     }
-    return globalFn.call(this, content, ...rest);
+    return fn.call(this, safeContent, ...rest);
   };
+
   wrapped.__ani_safe = true;
-  globalThis.substituteParams = wrapped;
+  globalThis[functionName] = wrapped;
 }
 
 async function handleGenerateDescriptionClick(root) {
@@ -188,6 +197,7 @@ async function handleGenerateDescriptionClick(root) {
 }
 
 async function generateStructuredOutputs(prompt, snapshot) {
+  ensureSafeMacroWrappers();
   const context = getSTContext();
   const generateQuietPrompt = context?.generateQuietPrompt;
   const generateRawFn = context?.generateRaw ?? coreGenerateRaw;
@@ -346,16 +356,24 @@ function captureContextSnapshot() {
   }
 
   const chatLog = Array.isArray(context.chat) ? context.chat : [];
-  const messages = chatLog.slice(-5).map((entry, index) => {
+  const relevantEntries = [];
+  chatLog.forEach((entry, idx) => {
+    if (isUserOrCharacterMessage(entry)) {
+      relevantEntries.push({ entry, idx });
+    }
+  });
+
+  const recentEntries = relevantEntries.slice(-5);
+  const messages = recentEntries.map(({ entry, idx }) => {
     if (typeof entry === 'string') {
-      return { index, speaker: 'unknown', text: entry };
+      return { index: idx, speaker: 'unknown', text: entry };
     }
     const text = entry?.mes ?? entry?.text ?? '';
     const speaker =
       entry?.name ||
       (entry?.is_user ? context?.name1 || 'You' : context?.name2 || 'Character') ||
       'unknown';
-    return { index, speaker, text };
+    return { index: idx, speaker, text };
   });
 
   return {
@@ -472,6 +490,22 @@ function getCharacterDescription(context) {
   }
 
   return null;
+}
+
+function isUserOrCharacterMessage(entry) {
+  if (entry == null) return false;
+  if (typeof entry === 'string') return true;
+  if (entry.is_system || entry.role === 'system' || entry.type === 'system' || entry.data?.role === 'system') {
+    return false;
+  }
+  if (typeof entry.is_user === 'boolean') {
+    return true;
+  }
+  const role = entry.role ?? entry.data?.role;
+  if (role === 'assistant' || role === 'user') {
+    return true;
+  }
+  return false;
 }
 
 function getUserCard(context) {
