@@ -74,12 +74,12 @@ function bindButtons(root) {
     .find('#ani-generate-desc')
     .on('click', () => {
       const prompt = extension_settings[SETTINGS_KEY].prompt || '';
-      const contextSnapshot = captureContextSnapshot();
+      const snapshot = captureContextSnapshot();
       console.group(`${LOG_PREFIX} Generate Description`);
       console.log('Prompt field:', prompt);
-      console.log('Recent messages:', contextSnapshot.messages);
-      console.log('User card:', contextSnapshot.userCard);
-      console.log('Character card:', contextSnapshot.characterCard);
+      console.log('Recent messages:', snapshot.messages);
+      console.log('User description:', snapshot.userDescription);
+      console.log('Character description:', snapshot.characterDescription);
       console.groupEnd();
     });
 
@@ -95,59 +95,6 @@ function bindButtons(root) {
     });
 }
 
-function captureContextSnapshot() {
-  const context = typeof getContext === 'function' ? getContext() : null;
-
-  const messagesSource = Array.isArray(context?.chat)
-    ? context.chat
-    : Array.isArray(globalThis?.chat)
-    ? globalThis.chat
-    : Array.isArray(context?.messages)
-    ? context.messages
-    : [];
-
-  const messages = messagesSource.slice(-5).map((entry, index) => {
-    if (typeof entry === 'string') {
-      return { index, speaker: 'unknown', text: entry };
-    }
-    const speaker =
-      entry?.name ||
-      (entry?.is_user ? context?.name1 || 'You' : context?.name2 || 'Character') ||
-      'unknown';
-    const text = entry?.mes ?? entry?.text ?? '';
-    return { index, speaker, text };
-  });
-
-  const userCard =
-    context?.user ??
-    context?.userCard ??
-    (globalThis?.characters &&
-      findCharacterById(globalThis.characters, context?.userId));
-  const characterCard =
-    context?.character ??
-    context?.characterCard ??
-    (globalThis?.characters &&
-      findCharacterById(globalThis.characters, context?.characterId));
-
-  return {
-    messages,
-    userCard: userCard ?? null,
-    characterCard: characterCard ?? null,
-  };
-}
-
-function findCharacterById(charactersCollection, id) {
-  if (!id || !charactersCollection) return null;
-  if (Array.isArray(charactersCollection)) {
-    return charactersCollection.find(
-      (character) => character?.avatar === id || character?.id === id,
-    );
-  }
-  if (typeof charactersCollection === 'object') {
-    return charactersCollection[id] ?? null;
-  }
-  return null;
-}
 function removeExistingUI() {
   document.getElementById(ROOT_ID)?.remove();
 }
@@ -191,3 +138,80 @@ jQuery(async () => {
   ensureSettings();
   await mountUI();
 });
+
+function captureContextSnapshot() {
+  const context = getSTContext();
+  if (!context) {
+    return {
+      messages: [],
+      userDescription: null,
+      characterDescription: null,
+    };
+  }
+
+  const chatLog = Array.isArray(context.chat) ? context.chat : [];
+  const messages = chatLog.slice(-5).map((entry, index) => {
+    if (typeof entry === 'string') {
+      return { index, speaker: 'unknown', text: entry };
+    }
+    const text = entry?.mes ?? entry?.text ?? '';
+    const speaker =
+      entry?.name ||
+      (entry?.is_user ? context?.name1 || 'You' : context?.name2 || 'Character') ||
+      'unknown';
+    return { index, speaker, text };
+  });
+
+  const userCard = getUserCard(context);
+  const characterCard = getActiveCharacterCard(context);
+
+  return {
+    messages,
+    userDescription: extractCardDescription(userCard),
+    characterDescription: extractCardDescription(characterCard),
+  };
+}
+
+function getSTContext() {
+  if (typeof globalThis.SillyTavern?.getContext === 'function') {
+    return globalThis.SillyTavern.getContext();
+  }
+  if (typeof getContext === 'function') {
+    return getContext();
+  }
+  return null;
+}
+
+function getActiveCharacterCard(context) {
+  if (!Array.isArray(context?.characters)) return null;
+  const idx = Number(context?.characterId);
+  if (Number.isInteger(idx) && idx >= 0 && idx < context.characters.length) {
+    return context.characters[idx] || null;
+  }
+  return null;
+}
+
+function getUserCard(context) {
+  if (context?.user) return context.user;
+  if (Array.isArray(context?.characters)) {
+    const userCandidate = context.characters.find(
+      (character) =>
+        character?.is_user ||
+        character?.isUser ||
+        character?.user === true ||
+        character?.data?.role === 'user',
+    );
+    if (userCandidate) return userCandidate;
+  }
+  return null;
+}
+
+function extractCardDescription(card) {
+  if (!card) return null;
+  return (
+    card.data?.description ??
+    card.data?.description_full ??
+    card.description ??
+    null
+  );
+}
