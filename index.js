@@ -183,8 +183,8 @@ async function generateStructuredOutputs(prompt, snapshot) {
 
   let rawResult = null;
   try {
-    if (typeof generateRaw === 'function') {
-      rawResult = await generateRaw({
+    if (typeof generateRawFn === 'function') {
+      rawResult = await generateRawFn({
         prompt: structuredPrompt,
         jsonSchema,
       });
@@ -202,8 +202,8 @@ async function generateStructuredOutputs(prompt, snapshot) {
   console.debug(`${LOG_PREFIX} Structured output raw result`, rawResult);
   const structured = parseStructuredOutput(rawResult);
   if (!structured?.scene && !structured?.character && !structured?.user) {
-    console.warn(`${LOG_PREFIX} Structured output request returned no data.`, rawResult);
-    return null;
+    console.warn(`${LOG_PREFIX} Structured output request returned no data. Using fallback.`, rawResult);
+    return buildFallbackOutputs(prompt, snapshot);
   }
 
   return structured;
@@ -228,16 +228,8 @@ function buildStructuredPrompt(prompt, snapshot) {
   const user = normalizeText(snapshot?.userDescription) ?? 'No user description provided.';
   const persona = normalizeText(snapshot?.persona?.description) ?? null;
 
-  const transcript = (snapshot?.messages ?? [])
-    .map((message, idx) => {
-      const speaker = message?.speaker || `Speaker ${idx + 1}`;
-      const text = normalizeText(message?.text ?? stringifyPrompt(message?.text)) ?? '[No text provided]';
-      return `${speaker}: ${text}`;
-    })
-    .join('\n');
-
+  const transcriptBlock = buildTranscriptBlock(snapshot);
   const personaLine = persona ? `Active Persona Description:\n${persona}\n` : '';
-  const transcriptBlock = transcript.length ? transcript : '[No recent messages provided]';
 
   return [
     'You are an assistant that prepares structured prompts for an image generator.',
@@ -254,6 +246,18 @@ function buildStructuredPrompt(prompt, snapshot) {
   ]
     .filter(Boolean)
     .join('\n\n');
+}
+
+function buildTranscriptBlock(snapshot) {
+  const transcript = (snapshot?.messages ?? [])
+    .map((message, idx) => {
+      const speaker = message?.speaker || `Speaker ${idx + 1}`;
+      const text = normalizeText(message?.text ?? stringifyPrompt(message?.text)) ?? '[No text provided]';
+      return `${speaker}: ${text}`;
+    })
+    .join('\n');
+
+  return transcript.length ? transcript : '[No recent messages provided]';
 }
 
 function getStructuredOutputSchema() {
@@ -298,6 +302,27 @@ function parseStructuredOutput(rawResult) {
     }
   }
   return null;
+}
+
+function buildFallbackOutputs(prompt, snapshot) {
+  const basePrompt = normalizeText(prompt) ?? defaultSettings.prompt;
+  const transcriptBlock = buildTranscriptBlock(snapshot);
+  const character = normalizeText(snapshot?.characterDescription) ?? 'No character description provided.';
+  const userDescription =
+    normalizeText(snapshot?.userDescription) ??
+    normalizeText(snapshot?.persona?.description) ??
+    'No user description provided.';
+
+  const sceneParts = [
+    basePrompt ? `Directive: ${basePrompt}` : null,
+    transcriptBlock ? `Recent Dialogue:\n${transcriptBlock}` : null,
+  ].filter(Boolean);
+
+  return {
+    scene: sceneParts.join('\n\n') || basePrompt || 'Scene details unavailable.',
+    character: character || 'Character details unavailable.',
+    user: userDescription || 'User details unavailable.',
+  };
 }
 
 function applyStructuredOutputs(root, structured) {
