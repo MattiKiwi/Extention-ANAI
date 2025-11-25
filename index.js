@@ -24,7 +24,10 @@ function deriveExtensionPath() {
 const extensionPath = deriveExtensionPath();
 
 const defaultSettings = {
-  prompt: '',
+  prompt: `Generate a concise tag-style prompt describing the current scene. Output only comma-separated tags.
+Include the number of characters, their attributes (gender, appearance, clothing, pose, expression), and key scene descriptors (camera angle, composition, environment, mood).
+Be specific but concise, using tags similar to: ‘1girl, black hair, grey eyes, head tilt, looking at viewer, close-up, from above’.
+Do NOT include full sentences—only descriptive tags.`,
   scene: '',
   character: '',
   user: '',
@@ -78,11 +81,11 @@ function bindButtons(root) {
       const prompt = extension_settings[SETTINGS_KEY].prompt || '';
       const snapshot = captureContextSnapshot();
       console.group(`${LOG_PREFIX} Generate Description`);
-      console.log('Prompt field:', prompt);
-      console.log('Recent messages:', snapshot.messages);
-      console.log('User description:', snapshot.userDescription);
-      console.log('Character description:', snapshot.characterDescription);
-      console.log('Persona context:', snapshot.persona);
+      console.log('Prompt field:', prompt); // User-defined prompt
+      console.log('Recent messages:', snapshot.messages); // Last 5 messages
+      console.log('User description:', snapshot.userDescription); // User persona description
+      console.log('Character description:', snapshot.characterDescription); // Active character description
+      console.log('Persona context:', snapshot.persona); // Persona details, beyond simple decription
       console.groupEnd();
     });
 
