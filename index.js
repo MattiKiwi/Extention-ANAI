@@ -2,9 +2,24 @@ import { saveSettingsDebounced } from '../../../../script.js';
 import { debounce } from '../../../utils.js';
 import { extension_settings, renderExtensionTemplateAsync } from '../../../extensions.js';
 
-const EXTENSION_NAME = 'third-party/advanced-image-gen';
+const FALLBACK_EXTENSION_PATH = 'third-party/advanced-image-gen';
 const SETTINGS_KEY = 'advanced_nai_image';
 const ROOT_ID = 'ani_container';
+const LOG_PREFIX = '[Advanced NAI Image]';
+
+function deriveExtensionPath() {
+  try {
+    const url = new URL(import.meta.url);
+    const [, afterExtensions = ''] = url.pathname.split('/extensions/');
+    const [extensionPath] = afterExtensions.split('/index.js');
+    return extensionPath || FALLBACK_EXTENSION_PATH;
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} Unable to derive extension path, falling back.`, error);
+    return FALLBACK_EXTENSION_PATH;
+  }
+}
+
+const extensionPath = deriveExtensionPath();
 
 const defaultSettings = {
   prompt: '',
@@ -59,14 +74,14 @@ function bindButtons(root) {
     .find('#ani-generate-desc')
     .on('click', () => {
       const prompt = extension_settings[SETTINGS_KEY].prompt || '';
-      console.log('[Advanced NAI Image] Generate Description', { prompt });
+      console.log(`${LOG_PREFIX} Generate Description`, { prompt });
     });
 
   $(root)
     .find('#ani-generate-image')
     .on('click', () => {
       const settings = extension_settings[SETTINGS_KEY];
-      console.log('[Advanced NAI Image] Generate Image', {
+      console.log(`${LOG_PREFIX} Generate Image`, {
         scene: settings.scene,
         character: settings.character,
         user: settings.user,
@@ -84,17 +99,24 @@ async function mountUI() {
     document.getElementById('extensions_settings');
 
   if (!container) {
-    console.warn('[Advanced NAI Image] Could not find settings panel to mount UI.');
+    console.warn(`${LOG_PREFIX} Could not find settings panel to mount UI.`);
     return;
   }
 
   removeExistingUI();
-  const html = await renderExtensionTemplateAsync(EXTENSION_NAME, 'dropdown');
+  let html;
+  try {
+    html = await renderExtensionTemplateAsync(extensionPath, 'dropdown');
+  } catch (error) {
+    console.error(`${LOG_PREFIX} Failed to load dropdown template.`, error);
+    return;
+  }
+
   container.insertAdjacentHTML('beforeend', html);
 
   const root = document.getElementById(ROOT_ID);
   if (!root) {
-    console.error('[Advanced NAI Image] Failed to render UI template.');
+    console.error(`${LOG_PREFIX} Failed to render UI template.`);
     return;
   }
 
