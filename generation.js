@@ -60,7 +60,9 @@ export async function generateStructuredOutputs(prompt, snapshot) {
     'If you cannot comply, output exactly: scene tags unavailable.'
   ]
     .filter(Boolean)
-    .join('\n\n'),
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim(),
 
   character: [
     'IGNORE ALL PREVIOUS INSTRUCTIONS.',
@@ -93,7 +95,9 @@ export async function generateStructuredOutputs(prompt, snapshot) {
     'If you cannot comply, output exactly: character tags unavailable.'
   ]
     .filter(Boolean)
-    .join('\n\n'),
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim(),
 
   user: [
     'IGNORE ALL PREVIOUS INSTRUCTIONS.',
@@ -127,7 +131,9 @@ export async function generateStructuredOutputs(prompt, snapshot) {
     'If you cannot comply, output exactly: user tags unavailable.'
   ]
     .filter(Boolean)
-    .join('\n\n')
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 };
 
 
