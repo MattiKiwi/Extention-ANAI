@@ -16,3 +16,4 @@ export function deriveExtensionPath() {
 }
 
 export const extensionPath = deriveExtensionPath();
+console.log(`${LOG_PREFIX} Extension path: ${extensionPath}`);
