@@ -71,7 +71,7 @@ export async function mountUI() {
   removeExistingUI();
   let html;
   try {
-    html = await renderExtensionTemplateAsync(extensionPath, 'dropdown');
+    html = await renderExtensionTemplateAsync(extensionPath, 'dropdown.html');
   } catch (error) {
     console.error(`${LOG_PREFIX} Failed to load dropdown template.`, error);
     return;
