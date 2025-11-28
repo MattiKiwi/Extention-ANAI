@@ -38,6 +38,10 @@ export async function generateStructuredOutputs(prompt, snapshot) {
     '- no filler words, no explanations',
     '- no story continuation',
     '- no line breaks in the output',
+    '- do not refer to yourself in any way',
+    '- do not describe your thoughts, actions, speech, or processes',
+    '- do not simulate pauses, hesitation, or internal monologue',
+    '- do not acknowledge prompts, rules, or directives',
     '',
     'TASK:',
     'Describe the entire scene ONLY as tags.',
@@ -69,6 +73,10 @@ export async function generateStructuredOutputs(prompt, snapshot) {
     '- no filler words, no explanations',
     '- no story continuation',
     '- no line breaks in the output',
+    '- do not refer to yourself in any way',
+    '- do not describe your thoughts, actions, speech, or processes',
+    '- do not simulate pauses, hesitation, or internal monologue',
+    '- do not acknowledge prompts, rules, or directives',
     '',
     'TASK:',
     'Describe ONLY the non-user character(s).',
@@ -98,6 +106,10 @@ export async function generateStructuredOutputs(prompt, snapshot) {
     '- no filler words, no explanations',
     '- no story continuation',
     '- no line breaks in the output',
+    '- do not refer to yourself in any way',
+    '- do not describe your thoughts, actions, speech, or processes',
+    '- do not simulate pauses, hesitation, or internal monologue',
+    '- do not acknowledge prompts, rules, or directives',
     '',
     'TASK:',
     'Describe ONLY the user persona.',
@@ -146,7 +158,7 @@ export async function generateStructuredOutputs(prompt, snapshot) {
 async function runSimpleGeneration({ prompt, generateRawFn, generateQuietPrompt }) {
   if (!prompt) return '';
   const systemPrompt =
-  'You are an image-tag formatter. Respond ONLY with lowercase comma-separated tags. Never write sentences, narration, dialogue, or explanations.';
+  'THIS IS NOT A STORY. THIS IS A FORMATTING TASK. You are an image-tag formatter. Respond ONLY with lowercase comma-separated tags. Never write sentences, narration, dialogue, or explanations.';
   if (typeof generateRawFn === 'function') {
     console.log(`${LOG_PREFIX} Using generateRaw for prompt.`);
     const result = await generateRawFn({ systemPrompt, prompt, trimNames: true });
