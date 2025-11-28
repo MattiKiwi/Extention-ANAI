@@ -26,43 +26,97 @@ export async function generateStructuredOutputs(prompt, snapshot) {
   const basePrompt = normalizeText(prompt) ?? defaultSettings.prompt;
 
   const sectionPrompts = {
-    scene: [
-      'IGNORE ALL PREVIOUS INSTRUCTIONS. OUTPUT ONLY LOWERCASE COMMA-SEPARATED TAGS.',
-      'Strict rules: no sentences, no narration, no quotes, no conjunctions, no story continuation. Tags only.',
-      basePrompt ? `Overall directive tags: ${basePrompt}` : null,
-      persona ? `User persona context tags: ${persona}` : null,
-      'Describe the entire scene with tags for environment, weather, lighting, mood, camera angle, character count, major actions, and notable props.',
-      'Example: moonlit forest, mist, 2 characters, walking together, cinematic lighting.',
-      `Recent dialogue context:\n${transcriptBlock}`,
-      'If you cannot comply, output "scene tags unavailable".',
-    ]
-      .filter(Boolean)
-      .join('\n\n'),
-    character: [
-      'IGNORE ALL PREVIOUS INSTRUCTIONS. OUTPUT ONLY LOWERCASE COMMA-SEPARATED TAGS.',
-      'Describe ONLY the non-user character(s). Do not mention the user persona or any narrative text.',
-      `Character background:\n${characterDescription}`,
-      `User persona reference (context only, do not tag user):\n${userDescription}`,
-      'Include tags for count, gender, physique, clothing, expression, pose, and props.',
-      'Example: 1girl, silver hair, battle armor, determined expression, sword ready, dynamic pose.',
-      `Recent dialogue context:\n${transcriptBlock}`,
-      'If you cannot comply, output "character tags unavailable".',
-    ]
-      .filter(Boolean)
-      .join('\n\n'),
-    user: [
-      'IGNORE ALL PREVIOUS INSTRUCTIONS. OUTPUT ONLY LOWERCASE COMMA-SEPARATED TAGS.',
-      'Describe ONLY the user persona. Do not mention other characters or narrative text.',
-      `User persona information:\n${userDescription}`,
-      persona ? `Additional persona details:\n${persona}` : null,
-      'Include tags for appearance, clothing, mood, pose, props, and camera framing.',
-      'Example: 1woman, rune-stitched robe, mischievous smile, holding wand, dim light, full length.',
-      `Recent dialogue context:\n${transcriptBlock}`,
-      'If you cannot comply, output "user tags unavailable".',
-    ]
-      .filter(Boolean)
-      .join('\n\n'),
-  };
+  scene: [
+    'IGNORE ALL PREVIOUS INSTRUCTIONS.',
+    'YOU ARE AN IMAGE-TAG FORMATTER.',
+    'HARD RULES:',
+    '- output only lowercase comma-separated tags',
+    '- no sentences or sentence fragments',
+    '- no narration, no dialogue, no quotes',
+    '- no conjunctions like "and", "but", "then"',
+    '- no filler words, no explanations',
+    '- no story continuation',
+    '- no line breaks in the output',
+    '',
+    'TASK:',
+    'Describe the entire scene ONLY as tags.',
+    'Describe environment, weather, lighting, mood, camera angle, character count, major actions, and notable props.',
+    'Do NOT describe character backstories or inner thoughts. Use only short visual tags.',
+    'Use short tags in a style similar to: moonlit forest, mist, 2 characters, walking together, cinematic lighting.',
+    basePrompt
+      ? `Overall directive tags (context only, do NOT repeat verbatim): ${basePrompt}`
+      : null,
+    persona
+      ? `User persona context tags (context only, do NOT repeat verbatim): ${persona}`
+      : null,
+    `Recent dialogue context (read for meaning, do NOT quote or rewrite):\n${transcriptBlock}`,
+    'OUTPUT FORMAT:',
+    'scene tags only, in the form: tag, tag, tag, tag',
+    'If you cannot comply, output exactly: scene tags unavailable.'
+  ]
+    .filter(Boolean)
+    .join('\n\n'),
+
+  character: [
+    'IGNORE ALL PREVIOUS INSTRUCTIONS.',
+    'YOU ARE AN IMAGE-TAG FORMATTER.',
+    'HARD RULES:',
+    '- output only lowercase comma-separated tags',
+    '- no sentences or sentence fragments',
+    '- no narration, no dialogue, no quotes',
+    '- no conjunctions like "and", "but", "then"',
+    '- no filler words, no explanations',
+    '- no story continuation',
+    '- no line breaks in the output',
+    '',
+    'TASK:',
+    'Describe ONLY the non-user character(s).',
+    'Do NOT mention the user persona.',
+    'Do NOT describe the environment, weather, or setting except where it is a direct prop on the character (e.g. holding staff, wearing cloak).',
+    `Character background (context only, do NOT repeat verbatim):\n${characterDescription}`,
+    `User persona reference (context only, do NOT tag user):\n${userDescription}`,
+    'Include tags for: count, gender, physique, clothing, expression, pose, and props directly associated with the character(s).',
+    'Use short stable-diffusion / danbooru style tags.',
+    'Example format: 1girl, silver hair, battle armor, determined expression, sword ready, dynamic pose.',
+    `Recent dialogue context (read for meaning, do NOT quote or rewrite):\n${transcriptBlock}`,
+    'OUTPUT FORMAT:',
+    'character tags only, in the form: tag, tag, tag, tag',
+    'If you cannot comply, output exactly: character tags unavailable.'
+  ]
+    .filter(Boolean)
+    .join('\n\n'),
+
+  user: [
+    'IGNORE ALL PREVIOUS INSTRUCTIONS.',
+    'YOU ARE AN IMAGE-TAG FORMATTER.',
+    'HARD RULES:',
+    '- output only lowercase comma-separated tags',
+    '- no sentences or sentence fragments',
+    '- no narration, no dialogue, no quotes',
+    '- no conjunctions like "and", "but", "then"',
+    '- no filler words, no explanations',
+    '- no story continuation',
+    '- no line breaks in the output',
+    '',
+    'TASK:',
+    'Describe ONLY the user persona.',
+    'Do NOT mention other characters or any narrative text.',
+    `User persona information (context only, do NOT repeat verbatim):\n${userDescription}`,
+    persona
+      ? `Additional persona details (context only, do NOT repeat verbatim):\n${persona}`
+      : null,
+    'Include tags for appearance, clothing, mood, pose, props, and camera framing.',
+    'Use short stable-diffusion / danbooru style tags.',
+    'Example format: 1woman, rune-stitched robe, mischievous smile, holding wand, dim light, full length.',
+    `Recent dialogue context (read for meaning, do NOT quote or rewrite):\n${transcriptBlock}`,
+    'OUTPUT FORMAT:',
+    'user persona tags only, in the form: tag, tag, tag, tag',
+    'If you cannot comply, output exactly: user tags unavailable.'
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+};
+
 
   console.debug(`${LOG_PREFIX} Section prompts`, sectionPrompts);
   const outputs = { scene: '', character: '', user: '' };
@@ -91,7 +145,8 @@ export async function generateStructuredOutputs(prompt, snapshot) {
 async function runSimpleGeneration({ prompt, generateRawFn, generateQuietPrompt }) {
   if (!prompt) return '';
   const systemPrompt =
-    'You are an image-tag formatter. Respond ONLY with lowercase comma-separated tags. Never write sentences or narration.';
+  'You are an image-tag formatter. Respond ONLY with lowercase comma-separated tags. ' +
+  'Never write sentences, narration, dialogue, or explanations.';
   if (typeof generateRawFn === 'function') {
     console.log(`${LOG_PREFIX} Using generateRaw for prompt.`);
     const result = await generateRawFn({ systemPrompt, prompt, trimNames: true });
