@@ -7,7 +7,7 @@ export function deriveExtensionPath() {
   try {
     const url = new URL(import.meta.url);
     const [, afterExtensions = ''] = url.pathname.split('/extensions/');
-    const [extensionPath] = afterExtensions.split('/index.js');
+    const [extensionPath] = afterExtensions.split('/config.js');
     return extensionPath || FALLBACK_EXTENSION_PATH;
   } catch (error) {
     console.warn(`${LOG_PREFIX} Unable to derive extension path, falling back.`, error);
