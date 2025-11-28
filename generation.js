@@ -94,7 +94,7 @@ async function runSimpleGeneration({ prompt, generateRawFn, generateQuietPrompt 
     'You are an image-tag formatter. Respond ONLY with lowercase comma-separated tags. Never write sentences or narration.';
   if (typeof generateRawFn === 'function') {
     console.log(`${LOG_PREFIX} Using generateRaw for prompt.`);
-    const result = await generateRawFn({ prompt, systemPrompt, trimNames: true });
+    const result = await generateRawFn({ systemPrompt, prompt, trimNames: true });
     if (!result) throw new Error('No message generated');
     return result;
   }
