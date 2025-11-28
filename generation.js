@@ -23,6 +23,7 @@ export async function generateStructuredOutputs(prompt, snapshot) {
     normalizeText(snapshot?.userDescription) ??
     normalizeText(snapshot?.persona?.description) ??
     'No user description provided.';
+  const personaDetails = persona && persona !== userDescription ? persona : null;
   const basePrompt = normalizeText(prompt) ?? defaultSettings.prompt;
 
   const sectionPrompts = {
@@ -46,8 +47,8 @@ export async function generateStructuredOutputs(prompt, snapshot) {
     basePrompt
       ? `Overall directive tags (context only, do NOT repeat verbatim): ${basePrompt}`
       : null,
-    persona
-      ? `User persona context tags (context only, do NOT repeat verbatim): ${persona}`
+    personaDetails
+      ? `User persona context tags (context only, do NOT repeat verbatim): ${personaDetails}`
       : null,
     `Recent dialogue context (read for meaning, do NOT quote or rewrite):\n${transcriptBlock}`,
     'OUTPUT FORMAT:',
@@ -102,8 +103,8 @@ export async function generateStructuredOutputs(prompt, snapshot) {
     'Describe ONLY the user persona.',
     'Do NOT mention other characters or any narrative text.',
     `User persona information (context only, do NOT repeat verbatim):\n${userDescription}`,
-    persona
-      ? `Additional persona details (context only, do NOT repeat verbatim):\n${persona}`
+    personaDetails
+      ? `Additional persona details (context only, do NOT repeat verbatim):\n${personaDetails}`
       : null,
     'Include tags for appearance, clothing, mood, pose, props, and camera framing.',
     'Use short stable-diffusion / danbooru style tags.',
@@ -145,8 +146,7 @@ export async function generateStructuredOutputs(prompt, snapshot) {
 async function runSimpleGeneration({ prompt, generateRawFn, generateQuietPrompt }) {
   if (!prompt) return '';
   const systemPrompt =
-  'You are an image-tag formatter. Respond ONLY with lowercase comma-separated tags. ' +
-  'Never write sentences, narration, dialogue, or explanations.';
+  'You are an image-tag formatter. Respond ONLY with lowercase comma-separated tags. Never write sentences, narration, dialogue, or explanations.';
   if (typeof generateRawFn === 'function') {
     console.log(`${LOG_PREFIX} Using generateRaw for prompt.`);
     const result = await generateRawFn({ systemPrompt, prompt, trimNames: true });

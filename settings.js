@@ -3,10 +3,21 @@ import { extension_settings } from '../../../extensions.js';
 import { SETTINGS_KEY } from './config.js';
 
 export const defaultSettings = {
-  prompt: `Generate a concise tag-style prompt describing the current scene. Output only comma-separated tags.
-Include the number of characters, their attributes (gender, appearance, clothing, pose, expression), and key scene descriptors (camera angle, composition, environment, mood).
-Be specific but concise, using tags similar to: ‘1girl, black hair, grey eyes, head tilt, looking at viewer, close-up, from above’.
-Do NOT include full sentences—only descriptive tags.`,
+  prompt: `
+    Generate only lowercase comma-separated visual tags.
+    No sentences, no narration, no dialogue, no quotes, no conjunctions, no filler words.
+
+    Include tags for:
+    - number of characters
+    - gender and appearance
+    - clothing
+    - expression
+    - pose
+    - camera angle and composition
+    - environment and mood
+
+    Use short tags only, similar to: 1girl, black hair, grey eyes, head tilt, looking at viewer, close-up, from above.
+    `.trim(),
   scene: '',
   character: '',
   user: '',
